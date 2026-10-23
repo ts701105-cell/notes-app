@@ -111,7 +111,7 @@ main#list{flex:1;overflow-y:auto;padding-bottom:90px}
 .fmt select{flex:none;border:1px solid var(--line);background:var(--card);color:var(--text);border-radius:6px;padding:5px 4px;font-size:13px}
 .fmt .sep{height:18px;margin:0 4px}
 #inkWrap{flex:1;overflow-y:auto;overflow-x:hidden;background:#d9dce1;overscroll-behavior:contain}
-#cv{display:block;background:#fff;touch-action:none;margin:0 auto}
+#cv{display:block;background:#fff;touch-action:none;margin:0 auto;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
 .tools{display:flex;gap:4px;align-items:center;overflow-x:auto;padding:6px 8px calc(6px + env(safe-area-inset-bottom));border-top:1px solid var(--line);background:var(--bg);scrollbar-width:none}
 .tools::-webkit-scrollbar{display:none}
 .tb{flex:none;min-width:42px;height:42px;padding:0 10px;border-radius:12px;display:grid;place-items:center;font-size:15px;white-space:nowrap}
@@ -972,7 +972,11 @@ function eraseAt(pt) {
   }
 }
 
+cv.addEventListener('contextmenu', e => e.preventDefault());
+cv.addEventListener('touchstart', e => e.preventDefault(), { passive: false });
+cv.addEventListener('touchmove', e => e.preventDefault(), { passive: false });
 cv.addEventListener('pointerdown', e => {
+  if (e.pointerType !== 'mouse') e.preventDefault();
   if (e.pointerType === 'pen') hasPen = true;
   touches.set(e.pointerId, { x: e.clientX, y: e.clientY, type: e.pointerType });
   const fingers = [...touches.values()].filter(t => t.type === 'touch').length;
@@ -1028,7 +1032,7 @@ function endPtr(e) {
   }
   if (drawing && drawing.id === e.pointerId) {
     const s = drawing; drawing = null; delete s.id; delete s.lp;
-    if (e.type !== 'pointercancel') {
+    if (e.type !== 'pointercancel' || s.p.length > 1) {
       ink.strokes.push(s); undoS.push({ a: 'add', s }); redoS = [];
       if (s.p.some(q => q[1] > ink.h - 160)) { ink.h += 700; sizeCanvas(); } else redraw();
       touch();
