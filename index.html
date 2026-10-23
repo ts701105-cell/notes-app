@@ -108,6 +108,9 @@ dialog .row{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
   </div>
   <div id="inkWrap"><canvas id="cv"></canvas></div>
   <div class="tools" id="inkTools">
+    <button class="tb" id="imgSm" hidden>圖－</button>
+    <button class="tb" id="imgBg" hidden>圖＋</button>
+    <button class="tb" id="imgDel" hidden>刪圖</button>
     <button class="tb on" data-tool="pen">✏️ 筆</button>
     <button class="tb" data-tool="hl">🖍️ 螢光</button>
     <button class="tb" data-tool="eraser">🧽 橡皮</button>
@@ -122,9 +125,6 @@ dialog .row{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
     <button class="tb on" id="prBtn">壓感</button>
     <span class="sep"></span>
     <button class="tb" id="imgBtn">＋圖片</button>
-    <button class="tb" id="imgSm" hidden>圖－</button>
-    <button class="tb" id="imgBg" hidden>圖＋</button>
-    <button class="tb" id="imgDel" hidden>刪圖</button>
     <input type="file" id="imgFile" accept="image/*" multiple hidden>
     <span class="sep"></span>
     <button class="tb" id="bgBtn">橫線</button>
@@ -414,6 +414,8 @@ function updInkUI() {
   $$('#dots .dot').forEach(b => b.classList.toggle('on', b.dataset.c === color));
   $('#prBtn').classList.toggle('on', usePr);
   const showImg = tool === 'img' && !!imgSel;
+  if (showImg && !$('#imgSm').dataset.seen) $('#inkTools').scrollLeft = 0;
+  $('#imgSm').dataset.seen = showImg ? '1' : '';
   ['#imgSm', '#imgBg', '#imgDel'].forEach(s => { $(s).hidden = !showImg; });
   $('#bgBtn').textContent = ink ? ({ blank: '空白', lines: '橫線', grid: '方格' })[ink.bg] : '橫線';
   $('#undoBtn').disabled = !undoS.length; $('#redoBtn').disabled = !redoS.length;
