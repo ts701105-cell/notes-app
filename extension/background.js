@@ -267,15 +267,27 @@ async function clip({ kind, tabId, tags = [], note = '' }) {
   if (!/^https?:/i.test(tab.url || '')) throw new Error('這個頁面(如 chrome:// 或商店頁)無法剪輯');
   const c = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7), title: tab.title || '', url: tab.url, tags: tags.slice(0, 8), note, ts: Date.now() };
   let info = {};
-  if (kind === 'simple') {
+  if (kind === 'simple') kind = 'article';
+  if (kind === 'article') {
     const r = await chrome.scripting.executeScript({ target: { tabId }, func: simplifyInPage }).then(x => x[0].result);
-    if (!r || !r.html || r.html.replace(/<[^>]+>/g, '').trim().length < 20) throw new Error('這個頁面抓不到主要內容,可試試整頁截圖');
+    if (!r || !r.html || r.html.replace(/<[^>]+>/g, '').trim().length < 20) {
+      // 簡化失敗時,退回純文字擷取
+      const t = await chrome.scripting.executeScript({ target: { tabId }, func: extractInPage, args: [false] }).then(x => x[0].result);
+      if (!t || !t.text) throw new Error('這個頁面抓不到主要內容,可試試整頁截圖');
+      Object.assign(c, { kind: 'text', title: t.title || c.title, url: t.url, text: t.text });
+      await enqueue(q => [...q, c]);
+      const apps0 = await chrome.tabs.query({ url: APP + '*' });
+      if (!apps0.length) await chrome.tabs.create({ url: APP, active: false });
+      chrome.action.setBadgeBackgroundColor({ color: '#188038' }); chrome.action.setBadgeText({ text: '✓' });
+      setTimeout(() => chrome.action.setBadgeText({ text: '' }), 3000);
+      return { images: 0, failed: 0 };
+    }
     const data = await pullAll(r.imgs);
     let ok = 0;
     c.html = r.html.replace(/<img data-i="(\d+)">/g, (m, i) => data[+i] ? (ok++, `<img src="${data[+i]}">`) : '');
     info = { images: ok, failed: r.imgs.length - data.filter(Boolean).length };
     c.kind = 'html'; c.title = r.title || c.title; c.url = r.url;
-  } else if (kind === 'article' || kind === 'selection' || kind === 'bookmark') {
+  } else if (kind === 'selection' || kind === 'bookmark') {
     const r = await chrome.scripting.executeScript({ target: { tabId }, func: extractInPage, args: [kind === 'selection'] }).then(x => x[0].result);
     if (kind === 'selection' && !r.text) throw new Error('請先在網頁上選取(反白)要剪下的文字');
     c.kind = 'text'; c.title = r.title || c.title; c.url = r.url;
@@ -301,8 +313,7 @@ chrome.runtime.onMessage.addListener((m, s, send) => {
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.removeAll(() => {
     chrome.contextMenus.create({ id: 'selection', title: '剪下選取的文字到雲筆記', contexts: ['selection'] });
-    chrome.contextMenus.create({ id: 'simple', title: '簡化擷取本頁(文字+圖片,去廣告留言)', contexts: ['page'] });
-    chrome.contextMenus.create({ id: 'article', title: '剪下本頁純文字到雲筆記', contexts: ['page'] });
+    chrome.contextMenus.create({ id: 'article', title: '擷取本頁文章到雲筆記', contexts: ['page'] });
     chrome.contextMenus.create({ id: 'full', title: '整頁截圖到雲筆記', contexts: ['page'] });
   });
 });

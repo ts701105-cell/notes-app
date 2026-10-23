@@ -3,7 +3,7 @@ document.querySelectorAll('button.act').forEach(b => b.onclick = async () => {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab) return;
   document.querySelectorAll('button.act').forEach(x => x.disabled = true);
-  st.className = ''; st.textContent = b.dataset.k === 'full' ? '截圖中,請不要切換分頁…' : b.dataset.k === 'simple' ? '擷取中,正在下載圖片,請稍候…' : '處理中…';
+  st.className = ''; st.textContent = b.dataset.k === 'full' ? '截圖中,請不要切換分頁…' : b.dataset.k === 'article' ? '擷取中,正在下載圖片,請稍候…' : '處理中…';
   const tags = document.getElementById('tags').value.split(/[,，、]/).map(s => s.trim()).filter(Boolean);
   const r = await chrome.runtime.sendMessage({ type: 'clip', kind: b.dataset.k, tabId: tab.id, tags, note: document.getElementById('note').value.trim() });
   document.querySelectorAll('button.act').forEach(x => x.disabled = false);
