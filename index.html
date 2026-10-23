@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#2f6fed">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg">
+<title>雲筆記</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--text:#1d2129;--sub:#6b7280;--line:#e5e7eb;--accent:#2f6fed;--danger:#d93025}
+@media (prefers-color-scheme:dark){:root{--bg:#121316;--card:#1c1e23;--text:#e8eaed;--sub:#9aa0a6;--line:#2c2f36;--accent:#7aa7ff;--danger:#f28b82}}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Noto Sans TC",sans-serif}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+header{position:sticky;top:0;z-index:5;background:var(--bg);padding:calc(10px + env(safe-area-inset-top)) 16px 8px}
+.bar{display:flex;align-items:center;gap:8px}
+.bar h1{font-size:20px;margin:0;flex:1}
+.ib{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;font-size:18px}
+.ib:active{background:var(--line)}
+#search{width:100%;margin-top:8px;padding:10px 14px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--text);font:inherit}
+#status{font-size:12px;color:var(--sub);margin:6px 2px 0;min-height:16px}
+main{padding:4px 16px 100px}
+.note{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin:10px 0}
+.note:active{opacity:.7}
+.note h3{margin:0 0 4px;font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.note p{margin:0;font-size:14px;color:var(--sub);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;white-space:pre-wrap}
+.note small{display:block;margin-top:6px;font-size:12px;color:var(--sub)}
+.empty{text-align:center;color:var(--sub);margin-top:60px}
+#fab{position:fixed;right:20px;bottom:calc(24px + env(safe-area-inset-bottom));width:58px;height:58px;border-radius:18px;background:var(--accent);color:#fff;font-size:30px;box-shadow:0 4px 14px rgba(0,0,0,.25)}
+#editor{position:fixed;inset:0;background:var(--bg);display:none;flex-direction:column;z-index:10}
+#editor.open{display:flex}
+#editor .bar{padding:calc(10px + env(safe-area-inset-top)) 12px 6px}
+#etitle{border:0;background:none;color:var(--text);font:inherit;font-size:20px;font-weight:600;padding:8px 16px;outline:none}
+#ebody{flex:1;border:0;background:none;color:var(--text);font:inherit;font-size:16px;line-height:1.6;padding:8px 16px calc(16px + env(safe-area-inset-bottom));resize:none;outline:none}
+dialog{border:1px solid var(--line);border-radius:16px;background:var(--card);color:var(--text);width:min(92vw,420px);padding:18px}
+dialog::backdrop{background:rgba(0,0,0,.45)}
+dialog h2{margin:0 0 10px;font-size:18px}
+dialog label{display:block;font-size:13px;color:var(--sub);margin:12px 0 4px}
+dialog input{width:100%;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--text);font:inherit}
+dialog .row{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
+.btn{padding:9px 16px;border-radius:10px;background:var(--line)}
+.btn.p{background:var(--accent);color:#fff}
+.hint{font-size:12px;color:var(--sub);line-height:1.5;margin-top:8px}
+</style>
+</head>
+<body>
+<header>
+  <div class="bar">
+    <h1>雲筆記</h1>
+    <button class="ib" id="syncBtn" title="同步 Google Drive">☁️</button>
+    <button class="ib" id="setBtn" title="設定">⚙️</button>
+  </div>
+  <input id="search" type="search" placeholder="搜尋筆記">
+  <div id="status"></div>
+</header>
+<main id="list"></main>
+<button id="fab" aria-label="新增筆記">＋</button>
+
+<section id="editor">
+  <div class="bar">
+    <button class="ib" id="backBtn" aria-label="返回">←</button>
+    <span style="flex:1"></span>
+    <button class="ib" id="delBtn" aria-label="刪除">🗑️</button>
+  </div>
+  <input id="etitle" placeholder="標題">
+  <textarea id="ebody" placeholder="開始輸入…"></textarea>
+</section>
+
+<dialog id="dlg">
+  <h2>Google Drive 同步設定</h2>
+  <label for="cid">OAuth 用戶端 ID</label>
+  <input id="cid" placeholder="xxxxxxxx.apps.googleusercontent.com" autocomplete="off">
+  <div class="hint">到 Google Cloud Console 建立「網頁應用程式」類型的 OAuth 用戶端 ID,並把本 App 網址加入「已授權的 JavaScript 來源」。筆記會存成你雲端硬碟中的 notes-sync.json,App 只能存取它自己建立的檔案。</div>
+  <div class="row">
+    <button class="btn" id="exportBtn">匯出備份</button>
+    <button class="btn" id="cancel">取消</button>
+    <button class="btn p" id="save">儲存</button>
+  </div>
+</dialog>
+
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script>
+const $ = s => document.querySelector(s);
+const KEY = 'cloudnotes.v1', CID_KEY = 'cloudnotes.cid', FILE = 'notes-sync.json';
+let notes = [];
+try { notes = JSON.parse(localStorage.getItem(KEY) || '[]'); } catch (e) { notes = []; }
+let current = null, token = null, tokenExp = 0, tokenClient = null, saveTimer = null;
+
+const persist = () => localStorage.setItem(KEY, JSON.stringify(notes));
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const setStatus = t => $('#status').textContent = t || '';
+const fmt = ts => new Date(ts).toLocaleString('zh-TW', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+function render() {
+  const q = $('#search').value.trim().toLowerCase();
+  const items = notes.filter(n => !n.deleted && (!q || (n.title + n.body).toLowerCase().includes(q)))
+    .sort((a, b) => b.updatedAt - a.updatedAt);
+  const box = $('#list');
+  box.innerHTML = '';
+  if (!items.length) { box.innerHTML = '<div class="empty">' + (q ? '找不到符合的筆記' : '還沒有筆記,點右下角 ＋ 新增') + '</div>'; return; }
+  for (const n of items) {
+    const d = document.createElement('div');
+    d.className = 'note';
+    const h = document.createElement('h3'); h.textContent = n.title || '(無標題)';
+    const p = document.createElement('p'); p.textContent = n.body || '';
+    const s = document.createElement('small'); s.textContent = fmt(n.updatedAt);
+    d.append(h, p, s);
+    d.onclick = () => openEditor(n.id);
+    box.append(d);
+  }
+}
+
+function openEditor(id) {
+  let n = notes.find(x => x.id === id);
+  if (!n) { n = { id: uid(), title: '', body: '', updatedAt: Date.now(), deleted: false }; notes.push(n); }
+  current = n;
+  $('#etitle').value = n.title; $('#ebody').value = n.body;
+  $('#editor').classList.add('open');
+  if (!n.title && !n.body) $('#ebody').focus();
+}
+
+function commit() {
+  if (!current) return;
+  const t = $('#etitle').value, b = $('#ebody').value;
+  if (t !== current.title || b !== current.body) {
+    current.title = t; current.body = b; current.updatedAt = Date.now();
+  }
+  persist();
+}
+
+function closeEditor() {
+  clearTimeout(saveTimer);
+  commit();
+  if (current && !current.title && !current.body) notes = notes.filter(n => n.id !== current.id);
+  current = null; persist();
+  $('#editor').classList.remove('open');
+  render();
+  autoSync();
+}
+
+['#etitle', '#ebody'].forEach(s => $(s).addEventListener('input', () => {
+  clearTimeout(saveTimer); saveTimer = setTimeout(commit, 400);
+}));
+$('#backBtn').onclick = closeEditor;
+$('#delBtn').onclick = () => {
+  if (!current || !confirm('要刪除這則筆記嗎?')) return;
+  current.deleted = true; current.title = ''; current.body = ''; current.updatedAt = Date.now();
+  current = null; persist(); $('#editor').classList.remove('open'); render(); autoSync();
+};
+$('#fab').onclick = () => openEditor();
+$('#search').oninput = render;
+addEventListener('popstate', () => { if (current) closeEditor(); });
+
+/* ---------- Google Drive 同步 ---------- */
+const cid = () => localStorage.getItem(CID_KEY) || '';
+
+function getToken(interactive) {
+  return new Promise((resolve, reject) => {
+    if (token && Date.now() < tokenExp - 60000) return resolve(token);
+    if (!window.google || !google.accounts) return reject(new Error('Google 登入元件尚未載入,請確認網路'));
+    if (!cid()) return reject(new Error('請先到 ⚙️ 設定填入 OAuth 用戶端 ID'));
+    tokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: cid(),
+      scope: 'https://www.googleapis.com/auth/drive.file',
+      callback: r => {
+        if (r.error) return reject(new Error(r.error));
+        token = r.access_token; tokenExp = Date.now() + r.expires_in * 1000;
+        localStorage.setItem('cloudnotes.linked', '1');
+        resolve(token);
+      },
+      error_callback: e => reject(new Error(e.type || '授權失敗'))
+    });
+    tokenClient.requestAccessToken({ prompt: interactive ? 'consent' : '' });
+  });
+}
+
+async function api(url, opts = {}) {
+  const r = await fetch(url, { ...opts, headers: { Authorization: 'Bearer ' + token, ...(opts.headers || {}) } });
+  if (!r.ok) throw new Error('Drive 錯誤 ' + r.status);
+  return r;
+}
+
+function merge(local, remote) {
+  const map = new Map();
+  for (const n of [...local, ...remote]) {
+    const o = map.get(n.id);
+    if (!o || n.updatedAt > o.updatedAt) map.set(n.id, n);
+  }
+  return [...map.values()];
+}
+
+let syncing = false;
+async function sync(interactive) {
+  if (syncing) return;
+  syncing = true; setStatus('同步中…');
+  try {
+    await getToken(interactive);
+    const q = encodeURIComponent(`name='${FILE}' and trashed=false`);
+    const found = await (await api(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id)`)).json();
+    let id = found.files[0] && found.files[0].id, remote = [];
+    if (id) {
+      try { remote = (await (await api(`https://www.googleapis.com/drive/v3/files/${id}?alt=media`)).json()).notes || []; } catch (e) { remote = []; }
+    }
+    commit();
+    notes = merge(notes, remote);
+    // 清掉超過 30 天的刪除標記
+    const cutoff = Date.now() - 30 * 864e5;
+    notes = notes.filter(n => !(n.deleted && n.updatedAt < cutoff));
+    persist(); render();
+    const body = JSON.stringify({ version: 1, notes });
+    if (id) {
+      await api(`https://www.googleapis.com/upload/drive/v3/files/${id}?uploadType=media`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body });
+    } else {
+      const bd = 'b' + uid();
+      const mp = `--${bd}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify({ name: FILE, mimeType: 'application/json' })}\r\n--${bd}\r\nContent-Type: application/json\r\n\r\n${body}\r\n--${bd}--`;
+      await api('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', { method: 'POST', headers: { 'Content-Type': 'multipart/related; boundary=' + bd }, body: mp });
+    }
+    setStatus('已同步 ' + new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' }));
+  } catch (e) {
+    setStatus('同步失敗:' + e.message);
+  } finally { syncing = false; }
+}
+
+function autoSync() {
+  if (localStorage.getItem('cloudnotes.linked') && token && Date.now() < tokenExp - 60000) sync(false);
+}
+
+$('#syncBtn').onclick = () => sync(!token);
+
+/* ---------- 設定 / 匯出 ---------- */
+$('#setBtn').onclick = () => { $('#cid').value = cid(); $('#dlg').showModal(); };
+$('#cancel').onclick = () => $('#dlg').close();
+$('#save').onclick = () => { localStorage.setItem(CID_KEY, $('#cid').value.trim()); token = null; $('#dlg').close(); setStatus('設定已儲存,點 ☁️ 開始同步'); };
+$('#exportBtn').onclick = () => {
+  const blob = new Blob([JSON.stringify({ notes: notes.filter(n => !n.deleted) }, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'notes-backup.json'; a.click();
+};
+
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
+render();
+</script>
+</body>
+</html>
