@@ -1481,7 +1481,7 @@ async function textCanvas(n) {
     const xhtml = new XMLSerializer().serializeToString(host);
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="${H}"><foreignObject x="0" y="0" width="800" height="${H}"><style>${EX_CSS}</style>${xhtml}</foreignObject></svg>`;
     const cv = await rasterSvg(svg, 800, H), kk = cv.height / H;
-    cv._br = { hard: hard.map(r => [r[0] * kk, r[1] * kk]), soft: soft.map(r => [r[0] * kk, r[1] * kk]) };
+    cv._br = { hard: hard.map(r => [Math.floor((r[0] - 10) * kk), Math.ceil((r[1] + 10) * kk)]), soft: soft.map(r => [Math.floor(r[0] * kk), Math.ceil(r[1] * kk)]) };
     return cv;
   } finally { probe.remove(); }
 }
@@ -1510,7 +1510,7 @@ async function inkCanvas(n) {
   const hard = [];
   for (const [m, im] of imgs) {
     const f = Math.min(1, 1100 / m.h), w = m.w * f, h = m.h * f;
-    g.drawImage(im, m.x + (m.w - w) / 2, m.y, w, h); hard.push([(HEAD + m.y) * k, (HEAD + m.y + h) * k]);
+    g.drawImage(im, m.x + (m.w - w) / 2, m.y, w, h); hard.push([Math.floor((HEAD + m.y) * k), Math.ceil((HEAD + m.y + h) * k)]);
   }
   for (const s of I.strokes) drawStroke(s, g);
   c._br = { hard, soft: [] };
@@ -1583,7 +1583,7 @@ async function canvasToPdf(src, fit) {
       if (e < src.height) {
         let e1 = pushUp(e, y, br.hard.concat(br.soft));
         if (e1 - y < uh * 0.5) e1 = pushUp(e, y, br.hard);
-        e = e1 - y < uh * 0.2 ? e : e1;
+        e = e1 > y ? e1 : e;
       }
       const sh = Math.max(1, Math.round(e - y)), y0 = y; y = y0 + sh;
       const pc = document.createElement('canvas'); pc.width = W; pc.height = pagePx;
