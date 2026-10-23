@@ -134,6 +134,10 @@ main#list{flex:1;overflow-y:auto;padding-bottom:90px}
 .chip.on{background:var(--accent);color:#fff;border-color:var(--accent)}
 .chip.tag{font-size:12px;padding:4px 10px}
 .chip[hidden]{display:none}
+.ed.locked .fmt,.ed.locked #inkTools .tb:not(#imgFile),.ed.locked #undoBtn,.ed.locked #redoBtn,.ed.locked #micBtn,.ed.locked #langBtn,.ed.locked #inkTools .sep,.ed.locked #inkTools #dots{display:none!important}
+.ed.locked #mChild,.ed.locked #mSib,.ed.locked #mEdit,.ed.locked #mCol,.ed.locked #mDel,.ed.locked #mindTools .sep:first-of-type{display:none!important}
+.ed.locked #inkTools{display:none!important}
+.ed.locked #etitle,.ed.locked .ttl{pointer-events:none}
 .tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
 .tg{font-size:12px;color:var(--accent);background:var(--sel);border-radius:6px;padding:1px 7px}
 
@@ -347,9 +351,10 @@ dialog .row{display:flex;gap:8px;justify-content:flex-end;margin-top:16px;flex-w
   </div>
 </dialog>
 
-<div class="meta" id="metaBar"><button class="chip" id="nbPick">📓 未分類</button><span id="metaTags" style="display:contents"></span><button class="chip" id="tagAdd">＋標籤</button><a class="chip" id="srcLink" target="_blank" rel="noopener" hidden>🔗 原網頁</a></div>
+<div class="meta" id="metaBar"><button class="chip" id="nbPick">📓 未分類</button><span id="metaTags" style="display:contents"></span><button class="chip" id="tagAdd">＋標籤</button><button class="chip" id="lockBtn">🔓 鎖定</button><button class="chip" id="cpBtn">⧉ 複製到…</button><a class="chip" id="srcLink" target="_blank" rel="noopener" hidden>🔗 原網頁</a></div>
 
 <dialog id="nbDlg"><h2>放進哪個記事本?</h2><div id="nbList"></div><div class="row"><button class="btn" id="nbClose">關閉</button></div></dialog>
+<dialog id="cpDlg"><h2>複製到哪個記事本?</h2><div id="cpList"></div><div class="row"><button class="btn" id="cpClose">取消</button></div></dialog>
 <dialog id="tagDlg">
   <h2>標籤</h2>
   <div class="inrow"><input id="tagInp" maxlength="20" placeholder="輸入標籤後按 Enter" autocomplete="off"><button class="btn p" id="tagOk">加入</button></div>
@@ -530,7 +535,7 @@ function render() {
     d.className = 'note' + (cur && cur.id === n.id ? ' sel' : '');
     const cm = document.createElement('div'); cm.className = 'cm';
     const h = document.createElement('h3');
-    h.textContent = (n.pin ? '📌 ' : '') + (t === 'ink' ? '✍️ ' : t === 'mind' ? '🧠 ' : '') + (n.title || (t === 'text' ? '無標題' : t === 'ink' ? '手寫筆記' : '心智圖'));
+    h.textContent = (n.pin ? '📌 ' : '') + (n.lock ? '🔒 ' : '') + (t === 'ink' ? '✍️ ' : t === 'mind' ? '🧠 ' : '') + (n.title || (t === 'text' ? '無標題' : t === 'ink' ? '手寫筆記' : '心智圖'));
     cm.append(h);
     let th = null;
     if (t === 'text') { const p = document.createElement('p'); p.textContent = n.body || ''; if (n.body) cm.append(p); const u = textThumb(n); if (u) { th = document.createElement('div'); th.className = 'nth'; const im = document.createElement('img'); im.src = u; im.alt = ''; th.append(im); } }
@@ -569,7 +574,7 @@ function newNote(type) {
 
 function isEmpty(n) {
   const t = typeOf(n);
-  if (n.title) return false;
+  if (n.title || n.lock) return false;
   if (t === 'text') return !n.body && !/<(img|hr)\b/i.test(n.html || '');
   if (t === 'ink') return !n.ink.strokes.length && !(n.ink.imgs || []).length;
   const ks = Object.keys(n.mind.nodes);
@@ -643,6 +648,7 @@ function openNote(n) {
   }
   if (t === 'ink') { $('#inkTitle').value = n.title; $('#inkEd').classList.add('open'); startInk(); }
   if (t === 'mind') { $('#mindTitle').value = n.title; $('#mindEd').classList.add('open'); startMind(); }
+  applyLock();
   if (wide()) render();
 }
 
@@ -675,7 +681,9 @@ function goBack() { if (pushed) history.back(); else closeEditor(); }
 addEventListener('popstate', () => { if (cur) closeEditor(); });
 $$('[data-back]').forEach(b => b.onclick = goBack);
 $$('[data-del]').forEach(b => b.onclick = async () => {
-  if (!cur || !(await askConfirm('把這則筆記移到垃圾桶?(30 天內可還原)'))) return;
+  if (!cur) return;
+  if (cur.lock) { toast('筆記已鎖定,請先解除鎖定才能刪除'); return; }
+  if (!(await askConfirm('把這則筆記移到垃圾桶?(30 天內可還原)'))) return;
   commit(); cur.deleted = true; cur.updatedAt = Date.now();
   persist(); goBack(); toast('已移到垃圾桶');
 });
@@ -786,7 +794,7 @@ ebody.addEventListener('drop', e => {
 });
 ebody.addEventListener('click', e => {
   const li = e.target.closest && e.target.closest('li');
-  if (li && e.target === li && li.parentElement && li.parentElement.classList.contains('todo') && e.offsetX < 30) {
+  if (li && e.target === li && li.parentElement && li.parentElement.classList.contains('todo') && e.offsetX < 30 && !(cur && cur.lock)) {
     li.classList.toggle('done'); ebody.dispatchEvent(new Event('input', { bubbles: true })); return;
   }
   const a = e.target.closest && e.target.closest('a');
@@ -957,7 +965,7 @@ cv.addEventListener('pointerdown', e => {
   if (e.pointerType === 'pen') hasPen = true;
   touches.set(e.pointerId, { x: e.clientX, y: e.clientY, type: e.pointerType });
   const fingers = [...touches.values()].filter(t => t.type === 'touch').length;
-  const pan = tool === 'hand' || (e.pointerType === 'touch' && (hasPen || fingers >= 2));
+  const pan = !!(cur && cur.lock) || tool === 'hand' || (e.pointerType === 'touch' && (hasPen || fingers >= 2));
   if (e.pointerType === 'touch' && fingers >= 2 && drawing) { drawing = null; redraw(); }
   if (pan) { panLast = { x: e.clientX, y: e.clientY, id: e.pointerId }; capture(e); return; }
   if (e.pointerType === 'mouse' && e.button !== 0) return;
@@ -1099,7 +1107,7 @@ function startMind() {
 function mindChanged() { cur.updatedAt = Date.now(); persist(); renderMind(); }
 
 function openNode(id, isNew) {
-  const n = M.nodes[id]; if (!n) return;
+  const n = M.nodes[id]; if (!n || (cur && cur.lock)) return;
   $('#nodeInp').value = n.t; $('#nodeDlg').dataset.id = id;
   $('#nodeDlg').showModal(); $('#nodeInp').select();
 }
@@ -1231,6 +1239,7 @@ function askConfirm(msg) {
 function renderMeta() {
   if (!cur) return;
   $('#nbPick').textContent = '📓 ' + nbName(cur);
+  $('#lockBtn').textContent = cur.lock ? '🔒 已鎖定' : '🔓 鎖定'; $('#lockBtn').classList.toggle('on', !!cur.lock);
   $$('[data-pin]').forEach(b => b.classList.toggle('on', !!cur.pin));
   const tg = cur.tags || [];
   $('#metaTags').innerHTML = tg.map(t => `<button class="chip tag on">#${esc(t)}</button>`).join('');
@@ -1240,13 +1249,56 @@ function renderMeta() {
 }
 function touchCur() { cur.updatedAt = Date.now(); persist(); }
 
+/* ---------- 鎖定(唯讀) ---------- */
+function applyLock() {
+  if (!cur) return;
+  const L = !!cur.lock, t = typeOf(cur);
+  stopVoice();
+  $$('.ed').forEach(e => e.classList.toggle('locked', L));
+  ebody.contentEditable = L ? 'false' : 'true';
+  $('#etitle').readOnly = L; $('#inkTitle').readOnly = L; $('#mindTitle').readOnly = L;
+  if (L && t === 'text') { ebody.blur(); getSelection().removeAllRanges(); }
+  $('#lockBtn').textContent = L ? '🔒 已鎖定' : '🔓 鎖定'; $('#lockBtn').classList.toggle('on', L);
+}
+$('#lockBtn').onclick = () => {
+  if (!cur) return;
+  if (!cur.lock) commit();
+  cur.lock = !cur.lock; touchCur(); applyLock(); render();
+  toast(cur.lock ? '已鎖定,內容無法修改' : '已解除鎖定');
+};
+
+/* ---------- 複製到其他記事本 ---------- */
+function renderCpList() {
+  const mine = nbOf(cur);
+  let h = `<button class="nt" data-cp="none"><span>　</span><div>未分類${!mine ? '(目前)' : ''}</div></button>`;
+  for (const b of liveNbs()) h += `<button class="nt" data-cp="${esc(b.id)}"><span>　</span><div>${esc(b.name)}${mine && mine.id === b.id ? '(目前)' : ''}</div></button>`;
+  $('#cpList').innerHTML = h + '<button class="nt" data-cp="__new"><span>＋</span><div>新增記事本…</div></button>';
+}
+$('#cpBtn').onclick = () => { if (!cur) return; renderCpList(); $('#cpDlg').showModal(); };
+$('#cpClose').onclick = () => $('#cpDlg').close();
+$('#cpList').addEventListener('click', async e => {
+  const b = e.target.closest('[data-cp]'); if (!b || !cur) return;
+  let v = b.dataset.cp;
+  if (v === '__new') { const name = await askText('新記事本名稱'); if (!name) return; v = createNb(name).id; }
+  $('#cpDlg').close();
+  commit();
+  const src = cur, nbId = v === 'none' ? null : v, same = (src.nb || null) === nbId, now = Date.now();
+  const c = JSON.parse(JSON.stringify(src));
+  c.id = uid(); c.nb = nbId; c.created = now; c.updatedAt = now; c.deleted = false;
+  delete c.pin; delete c.lock; delete c.gone;
+  if (same) c.title = (c.title || '無標題') + '(副本)';
+  notes.push(c); persist(); render(); autoSync();
+  const nm = nbId ? (nbs.find(x => x.id === nbId) || {}).name : '未分類';
+  toast('已複製到「' + nm + '」');
+});
+
 function renderNbPick() {
   const mine = nbOf(cur);
   let h = `<button class="nt" data-pick="none"><span>${mine ? '　' : '✓'}</span><div>未分類</div></button>`;
   for (const b of liveNbs()) h += `<button class="nt" data-pick="${esc(b.id)}"><span>${mine && mine.id === b.id ? '✓' : '　'}</span><div>${esc(b.name)}</div></button>`;
   $('#nbList').innerHTML = h + '<button class="nt" data-pick="__new"><span>＋</span><div>新增記事本…</div></button>';
 }
-$('#nbPick').onclick = () => { renderNbPick(); $('#nbDlg').showModal(); };
+$('#nbPick').onclick = () => { if (cur && cur.lock) { toast('筆記已鎖定,請先解除鎖定'); return; } renderNbPick(); $('#nbDlg').showModal(); };
 $('#nbClose').onclick = () => $('#nbDlg').close();
 $('#nbList').addEventListener('click', async e => {
   const b = e.target.closest('[data-pick]'); if (!b || !cur) return;
@@ -1268,7 +1320,7 @@ function addTag(v) {
   if (cur.tags.length >= 10) { toast('每則筆記最多 10 個標籤'); return; }
   cur.tags.push(v); touchCur(); renderTagDlg(); renderMeta();
 }
-function openTagDlg() { $('#tagInp').value = ''; renderTagDlg(); $('#tagDlg').showModal(); }
+function openTagDlg() { if (cur && cur.lock) { toast('筆記已鎖定,請先解除鎖定'); return; } $('#tagInp').value = ''; renderTagDlg(); $('#tagDlg').showModal(); }
 $('#tagAdd').onclick = openTagDlg;
 $('#metaTags').addEventListener('click', openTagDlg);
 $('#tagOk').onclick = () => { addTag($('#tagInp').value); $('#tagInp').value = ''; $('#tagInp').focus(); };
