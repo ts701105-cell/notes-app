@@ -134,6 +134,8 @@ main#list{flex:1;overflow-y:auto;padding-bottom:90px}
 .chip.on{background:var(--accent);color:#fff;border-color:var(--accent)}
 .chip.tag{font-size:12px;padding:4px 10px}
 .chip[hidden]{display:none}
+body.fs #side,body.fs #listPane{display:none!important}
+body.fs .ed .escroll>*{max-width:900px;margin-left:auto;margin-right:auto}
 .ed.locked .fmt,.ed.locked #inkTools .tb:not(#imgFile),.ed.locked #undoBtn,.ed.locked #redoBtn,.ed.locked #micBtn,.ed.locked #langBtn,.ed.locked #inkTools .sep,.ed.locked #inkTools #dots{display:none!important}
 .ed.locked #mChild,.ed.locked #mSib,.ed.locked #mEdit,.ed.locked #mCol,.ed.locked #mDel,.ed.locked #mindTools .sep:first-of-type{display:none!important}
 .ed.locked #inkTools{display:none!important}
@@ -351,7 +353,7 @@ dialog .row{display:flex;gap:8px;justify-content:flex-end;margin-top:16px;flex-w
   </div>
 </dialog>
 
-<div class="meta" id="metaBar"><button class="chip" id="nbPick">📓 未分類</button><span id="metaTags" style="display:contents"></span><button class="chip" id="tagAdd">＋標籤</button><button class="chip" id="lockBtn">🔓 鎖定</button><button class="chip" id="cpBtn">⧉ 複製到…</button><a class="chip" id="srcLink" target="_blank" rel="noopener" hidden>🔗 原網頁</a></div>
+<div class="meta" id="metaBar"><button class="chip" id="nbPick">📓 未分類</button><span id="metaTags" style="display:contents"></span><button class="chip" id="tagAdd">＋標籤</button><button class="chip" id="lockBtn">🔓 鎖定</button><button class="chip" id="cpBtn">⧉ 複製到…</button><button class="chip" id="fsBtn">⛶ 全螢幕</button><a class="chip" id="srcLink" target="_blank" rel="noopener" hidden>🔗 原網頁</a></div>
 
 <dialog id="nbDlg"><h2>放進哪個記事本?</h2><div id="nbList"></div><div class="row"><button class="btn" id="nbClose">關閉</button></div></dialog>
 <dialog id="cpDlg"><h2>複製到哪個記事本?</h2><div id="cpList"></div><div class="row"><button class="btn" id="cpClose">取消</button></div></dialog>
@@ -672,7 +674,7 @@ function commit() {
 }
 
 function closeEditor() {
-  finishCur(); pushed = false;
+  setFs(false); finishCur(); pushed = false;
   $$('.ed').forEach(e => e.classList.remove('open'));
   $('#paneEmpty').hidden = false;
   render();
@@ -1268,6 +1270,19 @@ $('#lockBtn').onclick = () => {
   cur.lock = !cur.lock; touchCur(); applyLock(); render();
   toast(cur.lock ? '已鎖定,內容無法修改' : '已解除鎖定');
 };
+
+/* ---------- 全螢幕 ---------- */
+function setFs(on) {
+  document.body.classList.toggle('fs', on);
+  $('#fsBtn').textContent = on ? '⛶ 退出全螢幕' : '⛶ 全螢幕'; $('#fsBtn').classList.toggle('on', on);
+  try {
+    if (on && !document.fullscreenElement && document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => {});
+    if (!on && document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  } catch (e) {}
+  if (cur && cur.ink) setTimeout(sizeCanvas, 60);
+}
+$('#fsBtn').onclick = () => setFs(!document.body.classList.contains('fs'));
+document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && document.body.classList.contains('fs')) setFs(false); });
 
 /* ---------- 複製到其他記事本 ---------- */
 function renderCpList() {
