@@ -436,7 +436,7 @@ function noteIn(n) {
   return n.nb === view.nb && !!nbOf(n);
 }
 const TYPE_TAG = { text: '文字', ink: '手寫', mind: '心智圖' };
-const tagsOf = n => { const tt = TYPE_TAG[typeOf(n)], o = (n.tags || []).filter(t => t.toLowerCase() !== tt.toLowerCase()); return [tt, ...o]; };
+const tagsOf = n => { const tt = TYPE_TAG[n.mind && n.mind.nodes ? 'mind' : n.ink && n.ink.strokes ? 'ink' : typeOf(n)] || TYPE_TAG.text, o = (n.tags || []).filter(t => t.toLowerCase() !== tt.toLowerCase()); return [tt, ...o]; };
 const hasTag = n => !view.tag || tagsOf(n).some(t => t.toLowerCase() === view.tag);
 const closeMenu = () => $('#app').classList.remove('menu');
 $('#menuBtn').onclick = () => $('#app').classList.toggle('menu');
