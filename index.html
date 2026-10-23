@@ -135,6 +135,12 @@ main#list{flex:1;overflow-y:auto;padding-bottom:90px}
 .chip.tag{font-size:12px;padding:4px 10px}
 .chip[hidden]{display:none}
 body.fs #side,body.fs #listPane{display:none!important}
+body.fs-ink #inkEd .bar,body.fs-ink #metaBar{display:none!important}
+#fsPill{display:none;position:fixed;top:calc(8px + env(safe-area-inset-top));right:10px;z-index:50;gap:2px;background:rgba(30,31,34,.78);border-radius:999px;padding:3px;box-shadow:0 2px 8px rgba(0,0,0,.25)}
+body.fs-ink #fsPill{display:flex}
+#fsPill .ib{width:38px;height:38px;color:#fff;font-size:17px}
+#fsPill .ib:disabled{opacity:.35}
+body.fs-ink.lk #fsPill #fsUndo,body.fs-ink.lk #fsPill #fsRedo{display:none}
 body.fs .ed .escroll>*{max-width:900px;margin-left:auto;margin-right:auto}
 .ed.locked .fmt,.ed.locked #inkTools .tb:not(#imgFile),.ed.locked #undoBtn,.ed.locked #redoBtn,.ed.locked #micBtn,.ed.locked #langBtn,.ed.locked #inkTools .sep,.ed.locked #inkTools #dots{display:none!important}
 .ed.locked #mChild,.ed.locked #mSib,.ed.locked #mEdit,.ed.locked #mCol,.ed.locked #mDel,.ed.locked #mindTools .sep:first-of-type{display:none!important}
@@ -353,6 +359,7 @@ dialog .row{display:flex;gap:8px;justify-content:flex-end;margin-top:16px;flex-w
   </div>
 </dialog>
 
+<div id="fsPill"><button class="ib" id="fsUndo" aria-label="復原">↶</button><button class="ib" id="fsRedo" aria-label="重做">↷</button><button class="ib" id="fsExit" aria-label="退出全螢幕" title="退出全螢幕">✕</button></div>
 <div class="meta" id="metaBar"><button class="chip" id="nbPick">📓 未分類</button><span id="metaTags" style="display:contents"></span><button class="chip" id="tagAdd">＋標籤</button><button class="chip" id="lockBtn">🔓 鎖定</button><button class="chip" id="cpBtn">⧉ 複製到…</button><button class="chip" id="fsBtn">⛶ 全螢幕</button><a class="chip" id="srcLink" target="_blank" rel="noopener" hidden>🔗 原網頁</a></div>
 
 <dialog id="nbDlg"><h2>放進哪個記事本?</h2><div id="nbList"></div><div class="row"><button class="btn" id="nbClose">關閉</button></div></dialog>
@@ -899,7 +906,7 @@ function updInkUI() {
   $('#imgSm').dataset.seen = showImg ? '1' : '';
   ['#imgSm', '#imgBg', '#imgDel'].forEach(s => { $(s).hidden = !showImg; });
   $('#bgBtn').textContent = ink ? ({ blank: '空白', lines: '橫線', grid: '方格' })[ink.bg] : '橫線';
-  $('#undoBtn').disabled = !undoS.length; $('#redoBtn').disabled = !redoS.length;
+  $('#undoBtn').disabled = !undoS.length; $('#redoBtn').disabled = !redoS.length; if (typeof syncFsPill === 'function') syncFsPill();
   cv.style.cursor = tool === 'hand' ? 'grab' : tool === 'img' ? 'move' : 'crosshair';
 }
 
@@ -1267,13 +1274,14 @@ function applyLock() {
 $('#lockBtn').onclick = () => {
   if (!cur) return;
   if (!cur.lock) commit();
-  cur.lock = !cur.lock; touchCur(); applyLock(); render();
+  cur.lock = !cur.lock; touchCur(); applyLock(); document.body.classList.toggle('lk', cur.lock); render();
   toast(cur.lock ? '已鎖定,內容無法修改' : '已解除鎖定');
 };
 
 /* ---------- 全螢幕 ---------- */
 function setFs(on) {
   document.body.classList.toggle('fs', on);
+  document.body.classList.toggle('fs-ink', on && !!cur && typeOf(cur) === 'ink'); document.body.classList.toggle('lk', !!(cur && cur.lock)); syncFsPill();
   $('#fsBtn').textContent = on ? '⛶ 退出全螢幕' : '⛶ 全螢幕'; $('#fsBtn').classList.toggle('on', on);
   try {
     if (on && !document.fullscreenElement && document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => {});
@@ -1281,6 +1289,8 @@ function setFs(on) {
   } catch (e) {}
   if (cur && cur.ink) setTimeout(sizeCanvas, 60);
 }
+function syncFsPill() { $('#fsUndo').disabled = $('#undoBtn').disabled; $('#fsRedo').disabled = $('#redoBtn').disabled; }
+$('#fsUndo').onclick = () => $('#undoBtn').click(); $('#fsRedo').onclick = () => $('#redoBtn').click(); $('#fsExit').onclick = () => setFs(false);
 $('#fsBtn').onclick = () => setFs(!document.body.classList.contains('fs'));
 document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && document.body.classList.contains('fs')) setFs(false); });
 
