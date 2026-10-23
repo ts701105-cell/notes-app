@@ -1470,18 +1470,27 @@ async function textCanvas(n) {
   probe.innerHTML = `<style>${EX_CSS}</style>`; probe.append(host.cloneNode(true)); document.body.append(probe);
   try {
     await Promise.all([...probe.querySelectorAll('img')].map(i => i.decode ? i.decode().catch(() => {}) : null));
-    const xEl = probe.querySelector('.x'), xr = xEl.getBoundingClientRect(), H = Math.ceil(xr.height), hard = [], soft = [];
-    for (const im of xEl.querySelectorAll('img,hr')) { const r = im.getBoundingClientRect(); hard.push([r.top - xr.top, r.bottom - xr.top]); }
-    const tw = document.createTreeWalker(xEl, NodeFilter.SHOW_TEXT); let tn;
-    while ((tn = tw.nextNode())) {
-      if (!tn.nodeValue.trim()) continue;
-      const rg = document.createRange(); rg.selectNodeContents(tn);
-      for (const r of rg.getClientRects()) if (r.height > 0) soft.push([r.top - xr.top, r.bottom - xr.top]);
-    }
+    const H = Math.ceil(probe.querySelector('.x').getBoundingClientRect().height);
     const xhtml = new XMLSerializer().serializeToString(host);
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="${H}"><foreignObject x="0" y="0" width="800" height="${H}"><style>${EX_CSS}</style>${xhtml}</foreignObject></svg>`;
-    const cv = await rasterSvg(svg, 800, H), kk = cv.height / H;
-    cv._br = { hard: hard.map(r => [Math.floor((r[0] - 10) * kk), Math.ceil((r[1] + 10) * kk)]), soft: soft.map(r => [Math.floor(r[0] * kk), Math.ceil(r[1] * kk)]) };
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="${H}"><foreignObject x="0" y="0" width="800" height="${H}"><style>${EX_CSS}.x img{box-shadow:-30px 0 0 0 #ff00ff}</style>${xhtml}</foreignObject></svg>`;
+    const cv = await rasterSvg(svg, 800, H), kk = cv.height / H, g = cv.getContext('2d');
+    // 從實際輸出的圖上找出每張圖片的位置(左側留白處有標記色),不依賴預先量測,才不會因排版些微差異而切到圖
+    const col = g.getImageData(Math.round(36 * kk), 0, 1, cv.height).data, hard = [];
+    let st = -1;
+    for (let y = 0; y < cv.height; y++) {
+      const o = y * 4, hit = col[o] > 225 && col[o + 1] < 70 && col[o + 2] > 225;
+      if (hit && st < 0) st = y;
+      if (!hit && st >= 0) { hard.push([Math.max(0, st - 8), y + 8]); st = -1; }
+    }
+    if (st >= 0) hard.push([Math.max(0, st - 8), cv.height]);
+    g.fillStyle = '#fff'; g.fillRect(0, 0, Math.round(51 * kk), cv.height); // 清掉標記
+    // 找出整列都是空白的位置,當作安全的換頁處(行與行之間)
+    const x0 = Math.round(52 * kk), w = Math.max(1, Math.round(748 * kk) - x0), blank = new Uint8Array(cv.height);
+    for (let y0 = 0; y0 < cv.height; y0 += 300) {
+      const hh = Math.min(300, cv.height - y0), d = g.getImageData(x0, y0, w, hh).data;
+      for (let r = 0; r < hh; r++) { let ok = 1; const base = r * w * 4; for (let q = 0; q < w; q++) { const o = base + q * 4; if (d[o] < 246 || d[o + 1] < 246 || d[o + 2] < 246) { ok = 0; break; } } blank[y0 + r] = ok; }
+    }
+    cv._br = { hard, blank };
     return cv;
   } finally { probe.remove(); }
 }
@@ -1513,7 +1522,7 @@ async function inkCanvas(n) {
     g.drawImage(im, m.x + (m.w - w) / 2, m.y, w, h); hard.push([Math.floor((HEAD + m.y) * k), Math.ceil((HEAD + m.y + h) * k)]);
   }
   for (const s of I.strokes) drawStroke(s, g);
-  c._br = { hard, soft: [] };
+  c._br = { hard, blank: null };
   return c;
 }
 
@@ -1576,14 +1585,19 @@ async function canvasToPdf(src, fit) {
     g.drawImage(src, (W - w) / 2, (pagePx - h) / 2, w, h);
     pages.push({ w: W, h: pagePx, bytes: await toJpg(pc) });
   } else {
-    const br = src._br || { hard: [], soft: [] };
+    const br = src._br || { hard: [], blank: null };
     const pushUp = (e, y, rs) => { let moved = true, n = 0; while (moved && n++ < 200) { moved = false; for (const r of rs) if (r[0] > y && r[0] < e && e < r[1]) { e = r[0]; moved = true; } } return e; };
+    const inHard = r => br.hard.some(h => h[0] < r && r < h[1]);
     for (let y = 0; y < src.height && pages.length < 80;) {
       let e = Math.min(src.height, y + uh);
       if (e < src.height) {
-        let e1 = pushUp(e, y, br.hard.concat(br.soft));
-        if (e1 - y < uh * 0.5) e1 = pushUp(e, y, br.hard);
-        e = e1 > y ? e1 : e;
+        e = pushUp(e, y, br.hard);
+        if (br.blank) { // 往上找最近的整列空白處換頁,避免切到文字行
+          const lim = y + Math.floor(uh * 0.3); let r = e;
+          while (r > lim && !(br.blank[r] && !inHard(r))) r--;
+          if (r > lim) e = r;
+        }
+        if (e <= y) e = Math.min(src.height, y + uh);
       }
       const sh = Math.max(1, Math.round(e - y)), y0 = y; y = y0 + sh;
       const pc = document.createElement('canvas'); pc.width = W; pc.height = pagePx;
