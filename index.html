@@ -227,6 +227,7 @@ dialog .row{display:flex;gap:8px;justify-content:flex-end;margin-top:16px;flex-w
         <span class="grow"></span>
         <button class="tb" id="langBtn">中文</button>
         <button class="tb" id="micBtn" aria-label="語音輸入">🎤</button>
+        <button class="ib" data-export aria-label="匯出" title="匯出 PDF / PNG / JPG">📤</button>
         <button class="ib" data-pin aria-label="置頂" title="置頂">📌</button>
         <button class="ib" data-del aria-label="刪除" title="移到垃圾桶">🗑️</button>
       </div>
@@ -255,6 +256,7 @@ dialog .row{display:flex;gap:8px;justify-content:flex-end;margin-top:16px;flex-w
         <input class="ttl" id="inkTitle" placeholder="標題">
         <button class="ib" id="undoBtn" aria-label="復原">↶</button>
         <button class="ib" id="redoBtn" aria-label="重做">↷</button>
+        <button class="ib" data-export aria-label="匯出" title="匯出 PDF / PNG / JPG">📤</button>
         <button class="ib" data-pin aria-label="置頂" title="置頂">📌</button>
         <button class="ib" data-del aria-label="刪除" title="移到垃圾桶">🗑️</button>
       </div>
@@ -289,6 +291,7 @@ dialog .row{display:flex;gap:8px;justify-content:flex-end;margin-top:16px;flex-w
       <div class="bar">
         <button class="ib" data-back aria-label="返回">←</button>
         <input class="ttl" id="mindTitle" placeholder="標題">
+        <button class="ib" data-export aria-label="匯出" title="匯出 PDF / PNG / JPG">📤</button>
         <button class="ib" data-pin aria-label="置頂" title="置頂">📌</button>
         <button class="ib" data-del aria-label="刪除" title="移到垃圾桶">🗑️</button>
       </div>
@@ -314,6 +317,14 @@ dialog .row{display:flex;gap:8px;justify-content:flex-end;margin-top:16px;flex-w
   <button class="nt" data-new="ink"><span>✍️</span><div>手寫筆記<small>手指或觸控筆書寫、畫圖</small></div></button>
   <button class="nt" data-new="mind"><span>🧠</span><div>心智圖<small>用節點整理想法</small></div></button>
   <div class="row"><button class="btn" id="newCancel">取消</button></div>
+</dialog>
+
+<dialog id="exDlg">
+  <h2>匯出這則筆記</h2>
+  <button class="nt" data-fmt="pdf"><span>📄</span><div>PDF<small>可列印與分享,內容太長會自動分頁</small></div></button>
+  <button class="nt" data-fmt="png"><span>🖼️</span><div>PNG 圖片<small>畫質最好</small></div></button>
+  <button class="nt" data-fmt="jpg"><span>📷</span><div>JPG 圖片<small>檔案較小</small></div></button>
+  <div class="row"><button class="btn" id="exCancel">取消</button></div>
 </dialog>
 
 <dialog id="nodeDlg">
@@ -810,29 +821,29 @@ function sizeCanvas() {
 addEventListener('resize', () => { if (cur && cur.ink) sizeCanvas(); });
 
 const prW = pr => .35 + 1.3 * pr;
-function drawStroke(s) {
+function drawStroke(s, c = ctx) {
   const p = s.p; if (!p || !p.length) return;
-  ctx.save();
-  ctx.lineCap = ctx.lineJoin = 'round';
-  ctx.strokeStyle = ctx.fillStyle = okColor(s.c);
-  ctx.globalAlpha = s.t === 'h' ? .38 : 1;
+  c.save();
+  c.lineCap = c.lineJoin = 'round';
+  c.strokeStyle = c.fillStyle = okColor(s.c);
+  c.globalAlpha = s.t === 'h' ? .38 : 1;
   if (s.pv && s.t !== 'h') {
-    if (p.length === 1) { ctx.beginPath(); ctx.arc(p[0][0], p[0][1], s.w * prW(p[0][2] || .5) / 2, 0, 6.2832); ctx.fill(); }
+    if (p.length === 1) { c.beginPath(); c.arc(p[0][0], p[0][1], s.w * prW(p[0][2] || .5) / 2, 0, 6.2832); c.fill(); }
     else for (let i = 1; i < p.length; i++) {
-      ctx.lineWidth = s.w * prW(((p[i - 1][2] || .5) + (p[i][2] || .5)) / 2);
-      ctx.beginPath(); ctx.moveTo(p[i - 1][0], p[i - 1][1]); ctx.lineTo(p[i][0], p[i][1]); ctx.stroke();
+      c.lineWidth = s.w * prW(((p[i - 1][2] || .5) + (p[i][2] || .5)) / 2);
+      c.beginPath(); c.moveTo(p[i - 1][0], p[i - 1][1]); c.lineTo(p[i][0], p[i][1]); c.stroke();
     }
-    ctx.restore(); return;
+    c.restore(); return;
   }
-  ctx.lineWidth = s.t === 'h' ? s.w * 5 : s.w;
-  ctx.beginPath();
-  if (p.length === 1) { ctx.arc(p[0][0], p[0][1], ctx.lineWidth / 2, 0, 6.2832); ctx.fill(); }
+  c.lineWidth = s.t === 'h' ? s.w * 5 : s.w;
+  c.beginPath();
+  if (p.length === 1) { c.arc(p[0][0], p[0][1], c.lineWidth / 2, 0, 6.2832); c.fill(); }
   else {
-    ctx.moveTo(p[0][0], p[0][1]);
-    for (let i = 1; i < p.length - 1; i++) ctx.quadraticCurveTo(p[i][0], p[i][1], (p[i][0] + p[i + 1][0]) / 2, (p[i][1] + p[i + 1][1]) / 2);
-    const l = p[p.length - 1]; ctx.lineTo(l[0], l[1]); ctx.stroke();
+    c.moveTo(p[0][0], p[0][1]);
+    for (let i = 1; i < p.length - 1; i++) c.quadraticCurveTo(p[i][0], p[i][1], (p[i][0] + p[i + 1][0]) / 2, (p[i][1] + p[i + 1][1]) / 2);
+    const l = p[p.length - 1]; c.lineTo(l[0], l[1]); c.stroke();
   }
-  ctx.restore();
+  c.restore();
 }
 
 const imgCache = new Map();
@@ -1416,6 +1427,172 @@ showLang();
 $('#micBtn').onclick = () => toggleVoice($('#ebody'), $('#micBtn'));
 $('#nodeMic').onclick = () => toggleVoice($('#nodeInp'), $('#nodeMic'));
 $('#nodeDlg').addEventListener('close', stopVoice);
+
+/* ---------- 匯出 PDF / PNG / JPG ---------- */
+const EX_CSS = `.x{width:800px;padding:48px 52px 56px;background:#fff;color:#262626;font:16px/1.7 system-ui,-apple-system,"Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;word-break:break-word;box-sizing:border-box}
+.x *{box-sizing:border-box}
+.x h1.t{font-size:30px;line-height:1.3;margin:0 0 8px}
+.x .m{font-size:13px;color:#6e7681;margin:0 0 20px;padding-bottom:12px;border-bottom:1px solid #e4e6e8}
+.x h1{font-size:24px;margin:.7em 0 .3em}.x h2{font-size:20px;margin:.7em 0 .3em}.x h3{font-size:17px;margin:.7em 0 .3em}
+.x ul,.x ol{padding-left:26px;margin:.3em 0}
+.x blockquote{margin:8px 0;padding:2px 14px;border-left:3px solid #00a82d;color:#6e7681}
+.x pre{background:#f3f4f5;padding:10px 12px;border-radius:8px;white-space:pre-wrap;font:14px/1.5 ui-monospace,Menlo,Consolas,monospace}
+.x img{max-width:100%;height:auto}
+.x a{color:#00a82d}
+.x hr{border:0;border-top:1px solid #e4e6e8;margin:14px 0}
+.x table{border-collapse:collapse;max-width:100%}.x td,.x th{border:1px solid #e4e6e8;padding:4px 8px}
+.x [style*="background-color"]{color:#1d2129}
+.x ul.todo{list-style:none;padding-left:0}
+.x ul.todo>li{position:relative;padding-left:30px}
+.x ul.todo>li::before{content:"";position:absolute;left:5px;top:.42em;width:16px;height:16px;border:2px solid #6e7681;border-radius:4px}
+.x ul.todo>li.done::before{content:"✓";background:#00a82d;border-color:#00a82d;color:#fff;font-size:12px;line-height:13px;text-align:center}
+.x ul.todo>li.done{color:#6e7681;text-decoration:line-through}`;
+const EX_FONT = 'system-ui,-apple-system,"Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif';
+const noteMeta = n => [nbOf(n) ? '📓 ' + nbName(n) : '', (n.tags || []).map(t => '#' + t).join(' '), '更新於 ' + fmtFull(n.updatedAt), n.src || ''].filter(Boolean).join('  ·  ');
+const loadImg = src => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('圖片載入失敗')); i.src = src; });
+
+async function rasterSvg(svg, W, H) {
+  const k = Math.min(2, 16000 / H, 16000 / W);
+  const url = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+  try {
+    const im = await loadImg(url);
+    const c = document.createElement('canvas'); c.width = Math.round(W * k); c.height = Math.round(H * k);
+    const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(im, 0, 0, c.width, c.height);
+    return c;
+  } finally { /* data URL 不需釋放 */ }
+}
+
+async function textCanvas(n) {
+  const html = sanitizeHtml(n.html != null ? n.html : plainToHtml(n.body));
+  const host = document.createElement('div'); host.className = 'x';
+  host.innerHTML = `<h1 class="t">${esc(n.title || '無標題')}</h1><div class="m">${esc(noteMeta(n))}</div><div class="b">${html}</div>`;
+  const probe = document.createElement('div'); probe.style.cssText = 'position:fixed;left:-10000px;top:0;width:800px;visibility:hidden;pointer-events:none';
+  probe.innerHTML = `<style>${EX_CSS}</style>`; probe.append(host.cloneNode(true)); document.body.append(probe);
+  try {
+    await Promise.all([...probe.querySelectorAll('img')].map(i => i.decode ? i.decode().catch(() => {}) : null));
+    const H = Math.ceil(probe.querySelector('.x').getBoundingClientRect().height);
+    const xhtml = new XMLSerializer().serializeToString(host);
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="${H}"><foreignObject x="0" y="0" width="800" height="${H}"><style>${EX_CSS}</style>${xhtml}</foreignObject></svg>`;
+    return await rasterSvg(svg, 800, H);
+  } finally { probe.remove(); }
+}
+
+async function inkCanvas(n) {
+  const I = n.ink, imgs = [];
+  for (const m of I.imgs || []) if (/^data:image\/(jpeg|png|webp);base64,/.test(m.d)) { try { imgs.push([m, await loadImg(m.d)]); } catch (e) {} }
+  let maxY = 0;
+  for (const s of I.strokes) for (const p of s.p) if (p[1] > maxY) maxY = p[1];
+  for (const m of I.imgs || []) maxY = Math.max(maxY, m.y + m.h);
+  const HEAD = 110, bodyH = Math.min(I.h, Math.max(700, Math.ceil(maxY + 80))), H = bodyH + HEAD, k = Math.min(1.6, 16000 / H);
+  const c = document.createElement('canvas'); c.width = Math.round(INK_W * k); c.height = Math.round(H * k);
+  const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height);
+  g.setTransform(k, 0, 0, k, 0, 0);
+  g.fillStyle = '#262626'; g.font = '700 40px ' + EX_FONT; g.fillText((n.title || '手寫筆記').slice(0, 34), 40, 56);
+  g.fillStyle = '#6e7681'; g.font = '20px ' + EX_FONT; g.fillText(noteMeta(n).slice(0, 80), 40, 92);
+  g.strokeStyle = '#e4e6e8'; g.lineWidth = 2; g.beginPath(); g.moveTo(40, 104); g.lineTo(INK_W - 40, 104); g.stroke();
+  g.translate(0, HEAD);
+  if (I.bg !== 'blank') {
+    g.strokeStyle = '#dfe3ea'; g.lineWidth = 1.2; g.beginPath();
+    const gs = I.bg === 'grid' ? 50 : 56;
+    for (let y = gs; y < bodyH; y += gs) { g.moveTo(0, y); g.lineTo(INK_W, y); }
+    if (I.bg === 'grid') for (let x = gs; x < INK_W; x += gs) { g.moveTo(x, 0); g.lineTo(x, bodyH); }
+    g.stroke();
+  }
+  for (const [m, im] of imgs) g.drawImage(im, m.x, m.y, m.w, m.h);
+  for (const s of I.strokes) drawStroke(s, g);
+  return c;
+}
+
+async function mindCanvas(n) {
+  const keep = M; M = n.mind;
+  try {
+    const pos = layout(), ids = Object.keys(pos);
+    let maxX = 0, minY = 1e9, maxY = -1e9;
+    for (const id of ids) { const p = pos[id]; maxX = Math.max(maxX, p.x + p.w + 24); minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y + NH); }
+    const PAD = 40, HEAD = 90, W = Math.max(700, Math.ceil(maxX + PAD * 2)), H = Math.ceil(maxY - minY + PAD * 2 + HEAD);
+    const ox = PAD, oy = PAD + HEAD - minY;
+    let links = '', nodes = '';
+    for (const id of ids) {
+      const nd = M.nodes[id], p = pos[id], col = colorOf(id) || '#00a82d', root = id === M.root;
+      for (const kid of (nd.col ? [] : nd.ch)) {
+        const q = pos[kid], x1 = p.x + p.w, y1 = p.y + NH / 2, y2 = q.y + NH / 2;
+        links += `<path d="M${x1} ${y1}C${x1 + 24} ${y1} ${q.x - 24} ${y2} ${q.x} ${y2}" fill="none" stroke="${colorOf(kid)}" stroke-width="2.5" stroke-linecap="round"/>`;
+      }
+      nodes += `<rect x="${p.x}" y="${p.y}" width="${p.w}" height="${NH}" rx="10" fill="${col}" fill-opacity="${root ? .92 : .16}" stroke="${col}" stroke-width="1.5"/>` +
+        `<text x="${p.x + p.w / 2}" y="${p.y + NH / 2}" text-anchor="middle" dominant-baseline="central" font-size="15" fill="${root ? '#fff' : '#262626'}" font-family='${EX_FONT.replace(/"/g, '&quot;')}'>${esc(label(nd.t))}</text>`;
+    }
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}"><rect width="100%" height="100%" fill="#fff"/>` +
+      `<text x="40" y="52" font-size="30" font-weight="700" fill="#262626" font-family='${EX_FONT.replace(/"/g, '&quot;')}'>${esc((n.title || '心智圖').slice(0, 40))}</text>` +
+      `<text x="40" y="78" font-size="14" fill="#6e7681" font-family='${EX_FONT.replace(/"/g, '&quot;')}'>${esc(noteMeta(n).slice(0, 110))}</text>` +
+      `<g transform="translate(${ox} ${oy})">${links}${nodes}</g></svg>`;
+    return await rasterSvg(svg, W, H);
+  } finally { M = keep; }
+}
+
+/* 簡易 PDF 產生器:每頁嵌入一張 JPEG,可正確顯示中文,不需額外字型 */
+function pdfFrom(pages, PW, PH) {
+  const enc = new TextEncoder(), chunks = [], xref = []; let off = 0;
+  const put = d => { const u = typeof d === 'string' ? enc.encode(d) : d; chunks.push(u); off += u.length; };
+  const obj = (id, body) => { xref[id] = off; put(`${id} 0 obj\n${body}\nendobj\n`); };
+  put('%PDF-1.4\n%\xE2\xE3\xCF\xD3\n');
+  const n = pages.length;
+  obj(1, '<< /Type /Catalog /Pages 2 0 R >>');
+  obj(2, `<< /Type /Pages /Count ${n} /Kids [${pages.map((_, i) => `${3 + 3 * i} 0 R`).join(' ')}] >>`);
+  pages.forEach((p, i) => {
+    const pid = 3 + 3 * i, cid = pid + 1, iid = pid + 2, cs = `q ${PW} 0 0 ${PH} 0 0 cm /Im0 Do Q`;
+    obj(pid, `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${PW} ${PH}] /Resources << /XObject << /Im0 ${iid} 0 R >> >> /Contents ${cid} 0 R >>`);
+    obj(cid, `<< /Length ${cs.length} >>\nstream\n${cs}\nendstream`);
+    xref[iid] = off; put(`${iid} 0 obj\n<< /Type /XObject /Subtype /Image /Width ${p.w} /Height ${p.h} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${p.bytes.length} >>\nstream\n`); put(p.bytes); put('\nendstream\nendobj\n');
+  });
+  const total = 3 + 3 * n, xo = off;
+  put(`xref\n0 ${total}\n0000000000 65535 f \n`);
+  for (let i = 1; i < total; i++) put(String(xref[i]).padStart(10, '0') + ' 00000 n \n');
+  put(`trailer\n<< /Size ${total} /Root 1 0 R >>\nstartxref\n${xo}\n%%EOF`);
+  return new Blob(chunks, { type: 'application/pdf' });
+}
+async function canvasToPdf(src, fit) {
+  const landscape = !!fit && src.width > src.height * 1.1;
+  const PW = landscape ? 841.89 : 595.28, PH = landscape ? 595.28 : 841.89;
+  const W = src.width, pagePx = Math.round(W * PH / PW), mY = Math.round(pagePx * 0.04), uh = pagePx - mY * 2, pages = [];
+  const toJpg = pc => new Promise(r => pc.toBlob(r, 'image/jpeg', 0.9)).then(b => b.arrayBuffer()).then(a => new Uint8Array(a));
+  if (fit) {
+    const pc = document.createElement('canvas'); pc.width = W; pc.height = pagePx;
+    const g = pc.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, W, pagePx);
+    const k = Math.min((W - mY * 2) / src.width, uh / src.height), w = src.width * k, h = src.height * k;
+    g.drawImage(src, (W - w) / 2, (pagePx - h) / 2, w, h);
+    pages.push({ w: W, h: pagePx, bytes: await toJpg(pc) });
+  } else {
+    for (let y = 0; y < src.height && pages.length < 80; y += uh) {
+      const sh = Math.min(uh, src.height - y), pc = document.createElement('canvas'); pc.width = W; pc.height = pagePx;
+      const g = pc.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, W, pagePx); g.drawImage(src, 0, y, W, sh, 0, mY, W, sh);
+      pages.push({ w: W, h: pagePx, bytes: await toJpg(pc) });
+    }
+  }
+  return pdfFrom(pages, PW, PH);
+}
+function download(blob, name) {
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 15000);
+}
+async function exportNote(fmt) {
+  if (!cur) return;
+  commit(); const n = cur, t = typeOf(n);
+  toast('產生中,請稍候…');
+  try {
+    const cv = t === 'text' ? await textCanvas(n) : t === 'ink' ? await inkCanvas(n) : await mindCanvas(n);
+    const base = ((n.title || '筆記').replace(/[\\/:*?"<>|\r\n]+/g, ' ').trim().slice(0, 60) || '筆記') + '_' + new Date().toISOString().slice(0, 10);
+    if (fmt === 'pdf') download(await canvasToPdf(cv, t === 'mind'), base + '.pdf');
+    else {
+      const blob = await new Promise(r => cv.toBlob(r, fmt === 'png' ? 'image/png' : 'image/jpeg', .92));
+      if (!blob) throw new Error('筆記太長,無法產生圖片,請改用 PDF');
+      download(blob, base + '.' + fmt);
+    }
+    toast('已匯出 ' + fmt.toUpperCase());
+  } catch (e) { console.error(e); toast('匯出失敗:' + (e.message || '未知錯誤')); }
+}
+$$('[data-export]').forEach(b => b.onclick = () => { if (cur) { commit(); $('#exDlg').showModal(); } });
+$('#exCancel').onclick = () => $('#exDlg').close();
+$$('#exDlg [data-fmt]').forEach(b => b.onclick = () => { $('#exDlg').close(); exportNote(b.dataset.fmt); });
 
 /* ---------- 設定 / 匯出 ---------- */
 $('#setBtn').onclick = () => { $('#cid').value = cid(); $('#dlg').showModal(); };
