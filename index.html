@@ -11,13 +11,14 @@
 :root{--bg:#f6f7f9;--card:#fff;--text:#1d2129;--sub:#6b7280;--line:#e5e7eb;--accent:#2f6fed;--danger:#d93025}
 @media (prefers-color-scheme:dark){:root{--bg:#121316;--card:#1c1e23;--text:#e8eaed;--sub:#9aa0a6;--line:#2c2f36;--accent:#7aa7ff;--danger:#f28b82}}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Noto Sans TC",sans-serif}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Noto Sans TC",sans-serif;overscroll-behavior:none}
 button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 header{position:sticky;top:0;z-index:5;background:var(--bg);padding:calc(10px + env(safe-area-inset-top)) 16px 8px}
-.bar{display:flex;align-items:center;gap:8px}
+.bar{display:flex;align-items:center;gap:4px}
 .bar h1{font-size:20px;margin:0;flex:1}
-.ib{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;font-size:18px}
+.ib{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;font-size:18px;flex:none}
 .ib:active{background:var(--line)}
+.ib[disabled]{opacity:.3}
 #search{width:100%;margin-top:8px;padding:10px 14px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--text);font:inherit}
 #status{font-size:12px;color:var(--sub);margin:6px 2px 0;min-height:16px}
 main{padding:4px 16px 100px}
@@ -26,13 +27,31 @@ main{padding:4px 16px 100px}
 .note h3{margin:0 0 4px;font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .note p{margin:0;font-size:14px;color:var(--sub);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;white-space:pre-wrap}
 .note small{display:block;margin-top:6px;font-size:12px;color:var(--sub)}
+.thumb{margin-top:6px;border-radius:8px;overflow:hidden;background:#fff;border:1px solid var(--line)}
+.thumb svg{display:block;width:100%;height:auto}
 .empty{text-align:center;color:var(--sub);margin-top:60px}
-#fab{position:fixed;right:20px;bottom:calc(24px + env(safe-area-inset-bottom));width:58px;height:58px;border-radius:18px;background:var(--accent);color:#fff;font-size:30px;box-shadow:0 4px 14px rgba(0,0,0,.25)}
-#editor{position:fixed;inset:0;background:var(--bg);display:none;flex-direction:column;z-index:10}
-#editor.open{display:flex}
-#editor .bar{padding:calc(10px + env(safe-area-inset-top)) 12px 6px}
+#fab{position:fixed;right:20px;bottom:calc(24px + env(safe-area-inset-bottom));width:58px;height:58px;border-radius:18px;background:var(--accent);color:#fff;font-size:30px;box-shadow:0 4px 14px rgba(0,0,0,.25);z-index:4}
+.ed{position:fixed;inset:0;background:var(--bg);display:none;flex-direction:column;z-index:10}
+.ed.open{display:flex}
+.ed .bar{padding:calc(8px + env(safe-area-inset-top)) 8px 4px}
+.ttl{flex:1;min-width:0;border:0;background:none;color:var(--text);font:inherit;font-size:18px;font-weight:600;padding:8px;outline:none}
 #etitle{border:0;background:none;color:var(--text);font:inherit;font-size:20px;font-weight:600;padding:8px 16px;outline:none}
 #ebody{flex:1;border:0;background:none;color:var(--text);font:inherit;font-size:16px;line-height:1.6;padding:8px 16px calc(16px + env(safe-area-inset-bottom));resize:none;outline:none}
+#inkWrap{flex:1;overflow-y:auto;overflow-x:hidden;background:#d9dce1;overscroll-behavior:contain}
+#cv{display:block;background:#fff;touch-action:none;margin:0 auto}
+.tools{display:flex;gap:4px;align-items:center;overflow-x:auto;padding:6px 8px calc(6px + env(safe-area-inset-bottom));border-top:1px solid var(--line);background:var(--bg);scrollbar-width:none}
+.tools::-webkit-scrollbar{display:none}
+.tb{flex:none;min-width:42px;height:42px;padding:0 10px;border-radius:12px;display:grid;place-items:center;font-size:15px;white-space:nowrap}
+.tb.on{background:var(--accent);color:#fff}
+.tb:active{opacity:.7}
+.tb[disabled]{opacity:.3}
+.sep{flex:none;width:1px;height:24px;background:var(--line);margin:0 4px}
+.dot{flex:none;width:30px;height:30px;border-radius:50%;border:3px solid transparent;background-clip:padding-box;box-shadow:inset 0 0 0 1px rgba(0,0,0,.2)}
+.dot.on{border-color:var(--accent)}
+#mmWrap{flex:1;position:relative;overflow:hidden;background:var(--card);touch-action:none}
+#mm{width:100%;height:100%;display:block;touch-action:none;user-select:none;-webkit-user-select:none}
+#mm text{font-size:15px;fill:var(--text);pointer-events:none}
+.mn rect{cursor:pointer}
 dialog{border:1px solid var(--line);border-radius:16px;background:var(--card);color:var(--text);width:min(92vw,420px);padding:18px}
 dialog::backdrop{background:rgba(0,0,0,.45)}
 dialog h2{margin:0 0 10px;font-size:18px}
@@ -42,6 +61,9 @@ dialog .row{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
 .btn{padding:9px 16px;border-radius:10px;background:var(--line)}
 .btn.p{background:var(--accent);color:#fff}
 .hint{font-size:12px;color:var(--sub);line-height:1.5;margin-top:8px}
+.nt{display:flex;align-items:center;gap:12px;width:100%;padding:14px;border-radius:12px;background:var(--bg);margin-top:8px;text-align:left;font-size:16px}
+.nt span{font-size:24px}
+.nt small{display:block;color:var(--sub);font-size:12px}
 </style>
 </head>
 <body>
@@ -57,15 +79,78 @@ dialog .row{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
 <main id="list"></main>
 <button id="fab" aria-label="新增筆記">＋</button>
 
-<section id="editor">
+<!-- 文字編輯 -->
+<section id="editor" class="ed" data-type="text">
   <div class="bar">
-    <button class="ib" id="backBtn" aria-label="返回">←</button>
+    <button class="ib" data-back aria-label="返回">←</button>
     <span style="flex:1"></span>
-    <button class="ib" id="delBtn" aria-label="刪除">🗑️</button>
+    <button class="ib" data-del aria-label="刪除">🗑️</button>
   </div>
   <input id="etitle" placeholder="標題">
   <textarea id="ebody" placeholder="開始輸入…"></textarea>
 </section>
+
+<!-- 手寫編輯 -->
+<section id="inkEd" class="ed" data-type="ink">
+  <div class="bar">
+    <button class="ib" data-back aria-label="返回">←</button>
+    <input class="ttl" id="inkTitle" placeholder="標題">
+    <button class="ib" id="undoBtn" aria-label="復原">↶</button>
+    <button class="ib" id="redoBtn" aria-label="重做">↷</button>
+    <button class="ib" data-del aria-label="刪除">🗑️</button>
+  </div>
+  <div id="inkWrap"><canvas id="cv"></canvas></div>
+  <div class="tools" id="inkTools">
+    <button class="tb on" data-tool="pen">✏️ 筆</button>
+    <button class="tb" data-tool="hl">🖍️ 螢光</button>
+    <button class="tb" data-tool="eraser">🧽 橡皮</button>
+    <button class="tb" data-tool="hand">✋ 移動</button>
+    <span class="sep"></span>
+    <span id="dots"></span>
+    <span class="sep"></span>
+    <button class="tb" data-w="3">細</button>
+    <button class="tb on" data-w="5">中</button>
+    <button class="tb" data-w="9">粗</button>
+    <span class="sep"></span>
+    <button class="tb" id="bgBtn">橫線</button>
+    <button class="tb" id="moreBtn">＋頁</button>
+  </div>
+</section>
+
+<!-- 心智圖編輯 -->
+<section id="mindEd" class="ed" data-type="mind">
+  <div class="bar">
+    <button class="ib" data-back aria-label="返回">←</button>
+    <input class="ttl" id="mindTitle" placeholder="標題">
+    <button class="ib" data-del aria-label="刪除">🗑️</button>
+  </div>
+  <div id="mmWrap"><svg id="mm" xmlns="http://www.w3.org/2000/svg"><g id="mmg"></g></svg></div>
+  <div class="tools" id="mindTools">
+    <button class="tb" id="mChild">＋子節點</button>
+    <button class="tb" id="mSib">＋同層</button>
+    <button class="tb" id="mEdit">✎ 編輯</button>
+    <button class="tb" id="mCol">折疊</button>
+    <button class="tb" id="mDel">🗑 刪除</button>
+    <span class="sep"></span>
+    <button class="tb" id="mOut">－</button>
+    <button class="tb" id="mIn">＋</button>
+    <button class="tb" id="mFit">置中</button>
+  </div>
+</section>
+
+<dialog id="newDlg">
+  <h2>新增筆記</h2>
+  <button class="nt" data-new="text"><span>📝</span><div>文字筆記<small>用鍵盤輸入</small></div></button>
+  <button class="nt" data-new="ink"><span>✍️</span><div>手寫筆記<small>手指或觸控筆書寫、畫圖</small></div></button>
+  <button class="nt" data-new="mind"><span>🧠</span><div>心智圖<small>用節點整理想法</small></div></button>
+  <div class="row"><button class="btn" id="newCancel">取消</button></div>
+</dialog>
+
+<dialog id="nodeDlg">
+  <h2>節點文字</h2>
+  <input id="nodeInp" maxlength="200" autocomplete="off">
+  <div class="row"><button class="btn" id="nodeCancel">取消</button><button class="btn p" id="nodeOk">確定</button></div>
+</dialog>
 
 <dialog id="dlg">
   <h2>Google Drive 同步設定</h2>
@@ -82,49 +167,95 @@ dialog .row{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script>
 const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
 const KEY = 'cloudnotes.v1', CID_KEY = 'cloudnotes.cid', FILE = 'notes-sync.json';
 let notes = [];
 try { notes = JSON.parse(localStorage.getItem(KEY) || '[]'); } catch (e) { notes = []; }
-let current = null, token = null, tokenExp = 0, tokenClient = null, saveTimer = null;
+let cur = null, token = null, tokenExp = 0, saveTimer = null, pushed = false;
 
-const persist = () => localStorage.setItem(KEY, JSON.stringify(notes));
+const persist = () => { try { localStorage.setItem(KEY, JSON.stringify(notes)); } catch (e) { setStatus('儲存空間不足'); } };
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 const setStatus = t => $('#status').textContent = t || '';
 const fmt = ts => new Date(ts).toLocaleString('zh-TW', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const okColor = c => /^#[0-9a-f]{6}$/i.test(c) ? c : '#1d2129';
+const typeOf = n => n.type || 'text';
+const touch = () => { if (cur) { cur.updatedAt = Date.now(); persist(); } };
+const touchSoon = () => { clearTimeout(saveTimer); saveTimer = setTimeout(touch, 400); };
+
+/* ---------- 列表 ---------- */
+function inkThumb(n) {
+  const strokes = (n.ink && n.ink.strokes) || [];
+  const H = 460; let d = '';
+  for (const s of strokes) {
+    if (!s.p || !s.p.length || s.p[0][1] > H + 40) continue;
+    const c = okColor(s.c), w = (s.t === 'h' ? s.w * 5 : s.w) || 4, op = s.t === 'h' ? .38 : 1;
+    const pts = s.p.map(p => Math.round(p[0]) + ' ' + Math.round(p[1]));
+    d += `<path d="M${pts[0]}${pts.length > 1 ? 'L' + pts.slice(1).join('L') : 'l0 .1'}" stroke="${c}" stroke-width="${w}" stroke-opacity="${op}" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`;
+  }
+  return `<svg viewBox="0 0 1000 ${H}" preserveAspectRatio="xMidYMin slice">${d}</svg>`;
+}
 
 function render() {
   const q = $('#search').value.trim().toLowerCase();
-  const items = notes.filter(n => !n.deleted && (!q || (n.title + n.body).toLowerCase().includes(q)))
-    .sort((a, b) => b.updatedAt - a.updatedAt);
+  const text = n => (n.title + ' ' + (typeOf(n) === 'mind' ? Object.values(n.mind.nodes).map(x => x.t).join(' ') : n.body || '')).toLowerCase();
+  const items = notes.filter(n => !n.deleted && (!q || text(n).includes(q))).sort((a, b) => b.updatedAt - a.updatedAt);
   const box = $('#list');
   box.innerHTML = '';
   if (!items.length) { box.innerHTML = '<div class="empty">' + (q ? '找不到符合的筆記' : '還沒有筆記,點右下角 ＋ 新增') + '</div>'; return; }
   for (const n of items) {
+    const t = typeOf(n);
     const d = document.createElement('div');
     d.className = 'note';
-    const h = document.createElement('h3'); h.textContent = n.title || '(無標題)';
-    const p = document.createElement('p'); p.textContent = n.body || '';
+    const h = document.createElement('h3');
+    h.textContent = (t === 'ink' ? '✍️ ' : t === 'mind' ? '🧠 ' : '') + (n.title || (t === 'text' ? '(無標題)' : t === 'ink' ? '手寫筆記' : '心智圖'));
+    d.append(h);
+    if (t === 'text') { const p = document.createElement('p'); p.textContent = n.body || ''; d.append(p); }
+    else if (t === 'ink') { const w = document.createElement('div'); w.className = 'thumb'; w.innerHTML = inkThumb(n); d.append(w); }
+    else { const p = document.createElement('p'); const cnt = Object.keys(n.mind.nodes).length; p.textContent = (n.mind.nodes[n.mind.root].t || '') + ' · 共 ' + cnt + ' 個節點'; d.append(p); }
     const s = document.createElement('small'); s.textContent = fmt(n.updatedAt);
-    d.append(h, p, s);
-    d.onclick = () => openEditor(n.id);
+    d.append(s);
+    d.onclick = () => openNote(n);
     box.append(d);
   }
 }
 
-function openEditor(id) {
-  let n = notes.find(x => x.id === id);
-  if (!n) { n = { id: uid(), title: '', body: '', updatedAt: Date.now(), deleted: false }; notes.push(n); }
-  current = n;
-  $('#etitle').value = n.title; $('#ebody').value = n.body;
-  $('#editor').classList.add('open');
-  if (!n.title && !n.body) $('#ebody').focus();
+/* ---------- 開啟 / 關閉 ---------- */
+function newNote(type) {
+  const n = { id: uid(), type, title: '', body: '', updatedAt: Date.now(), deleted: false };
+  if (type === 'ink') n.ink = { h: 1400, bg: 'lines', strokes: [] };
+  if (type === 'mind') { const r = uid(); n.mind = { root: r, nodes: { [r]: { id: r, t: '中心主題', p: null, ch: [], col: false } }, v: null }; }
+  notes.push(n);
+  openNote(n);
+}
+
+function isEmpty(n) {
+  const t = typeOf(n);
+  if (n.title) return false;
+  if (t === 'text') return !n.body;
+  if (t === 'ink') return !n.ink.strokes.length;
+  const ks = Object.keys(n.mind.nodes);
+  return ks.length === 1 && n.mind.nodes[n.mind.root].t === '中心主題';
+}
+
+function openNote(n) {
+  cur = n;
+  const t = typeOf(n);
+  history.pushState({ ed: 1 }, ''); pushed = true;
+  if (t === 'text') { $('#etitle').value = n.title; $('#ebody').value = n.body; $('#editor').classList.add('open'); if (!n.title && !n.body) $('#ebody').focus(); }
+  if (t === 'ink') { $('#inkTitle').value = n.title; $('#inkEd').classList.add('open'); startInk(); }
+  if (t === 'mind') { $('#mindTitle').value = n.title; $('#mindEd').classList.add('open'); startMind(); }
 }
 
 function commit() {
-  if (!current) return;
-  const t = $('#etitle').value, b = $('#ebody').value;
-  if (t !== current.title || b !== current.body) {
-    current.title = t; current.body = b; current.updatedAt = Date.now();
+  if (!cur || cur.deleted) return;
+  const t = typeOf(cur);
+  if (t === 'text') {
+    const ti = $('#etitle').value, b = $('#ebody').value;
+    if (ti !== cur.title || b !== cur.body) { cur.title = ti; cur.body = b; cur.updatedAt = Date.now(); }
+  } else {
+    const ti = (t === 'ink' ? $('#inkTitle') : $('#mindTitle')).value;
+    if (ti !== cur.title) { cur.title = ti; cur.updatedAt = Date.now(); }
   }
   persist();
 }
@@ -132,25 +263,336 @@ function commit() {
 function closeEditor() {
   clearTimeout(saveTimer);
   commit();
-  if (current && !current.title && !current.body) notes = notes.filter(n => n.id !== current.id);
-  current = null; persist();
-  $('#editor').classList.remove('open');
+  if (cur && !cur.deleted && isEmpty(cur)) notes = notes.filter(n => n.id !== cur.id);
+  cur = null; pushed = false; persist();
+  $$('.ed').forEach(e => e.classList.remove('open'));
   render();
   autoSync();
 }
 
-['#etitle', '#ebody'].forEach(s => $(s).addEventListener('input', () => {
-  clearTimeout(saveTimer); saveTimer = setTimeout(commit, 400);
-}));
-$('#backBtn').onclick = closeEditor;
-$('#delBtn').onclick = () => {
-  if (!current || !confirm('要刪除這則筆記嗎?')) return;
-  current.deleted = true; current.title = ''; current.body = ''; current.updatedAt = Date.now();
-  current = null; persist(); $('#editor').classList.remove('open'); render(); autoSync();
-};
-$('#fab').onclick = () => openEditor();
+function goBack() { if (pushed) history.back(); else closeEditor(); }
+addEventListener('popstate', () => { if (cur) closeEditor(); });
+$$('[data-back]').forEach(b => b.onclick = goBack);
+$$('[data-del]').forEach(b => b.onclick = () => {
+  if (!cur || !confirm('要刪除這則筆記嗎?')) return;
+  cur.deleted = true; cur.title = ''; cur.body = ''; cur.updatedAt = Date.now();
+  if (cur.ink) cur.ink = { h: 1400, bg: 'blank', strokes: [] };
+  if (cur.mind) { const r = uid(); cur.mind = { root: r, nodes: { [r]: { id: r, t: '', p: null, ch: [], col: false } }, v: null }; }
+  persist(); goBack();
+});
+
+['#etitle', '#ebody', '#inkTitle', '#mindTitle'].forEach(s => $(s).addEventListener('input', () => { clearTimeout(saveTimer); saveTimer = setTimeout(commit, 400); }));
+
+$('#fab').onclick = () => $('#newDlg').showModal();
+$('#newCancel').onclick = () => $('#newDlg').close();
+$$('[data-new]').forEach(b => b.onclick = () => { $('#newDlg').close(); newNote(b.dataset.new); });
 $('#search').oninput = render;
-addEventListener('popstate', () => { if (current) closeEditor(); });
+
+/* ---------- 手寫 ---------- */
+const INK_W = 1000, PALETTE = ['#1d2129', '#d93025', '#2f6fed', '#1e8e3e', '#f29900', '#9334e6'];
+const cv = $('#cv'), ctx = cv.getContext('2d');
+let ink = null, scale = 1, dpr = 1, tool = 'pen', color = PALETTE[0], pw = 5, hasPen = false;
+let undoS = [], redoS = [], drawing = null, erasing = null, touches = new Map(), panLast = null;
+
+$('#dots').style.display = 'contents';
+$('#dots').innerHTML = PALETTE.map((c, i) => `<button class="dot${i ? '' : ' on'}" data-c="${c}" style="background:${c}" aria-label="顏色"></button>`).join('');
+
+function startInk() {
+  ink = cur.ink; undoS = []; redoS = []; drawing = null; erasing = null; touches.clear();
+  $('#inkWrap').scrollTop = 0;
+  sizeCanvas(); updInkUI();
+}
+
+function sizeCanvas() {
+  if (!ink) return;
+  const w = $('#inkWrap').clientWidth;
+  if (!w) return;
+  scale = w / INK_W; dpr = window.devicePixelRatio || 1;
+  cv.style.width = w + 'px'; cv.style.height = ink.h * scale + 'px';
+  cv.width = Math.round(w * dpr); cv.height = Math.round(ink.h * scale * dpr);
+  redraw();
+}
+addEventListener('resize', () => { if (cur && cur.ink) sizeCanvas(); });
+
+function drawStroke(s) {
+  const p = s.p; if (!p || !p.length) return;
+  ctx.save();
+  ctx.lineCap = ctx.lineJoin = 'round';
+  ctx.strokeStyle = ctx.fillStyle = okColor(s.c);
+  ctx.lineWidth = s.t === 'h' ? s.w * 5 : s.w;
+  ctx.globalAlpha = s.t === 'h' ? .38 : 1;
+  ctx.beginPath();
+  if (p.length === 1) { ctx.arc(p[0][0], p[0][1], ctx.lineWidth / 2, 0, 6.2832); ctx.fill(); }
+  else {
+    ctx.moveTo(p[0][0], p[0][1]);
+    for (let i = 1; i < p.length - 1; i++) ctx.quadraticCurveTo(p[i][0], p[i][1], (p[i][0] + p[i + 1][0]) / 2, (p[i][1] + p[i + 1][1]) / 2);
+    const l = p[p.length - 1]; ctx.lineTo(l[0], l[1]); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function redraw() {
+  if (!ink) return;
+  ctx.setTransform(dpr * scale, 0, 0, dpr * scale, 0, 0);
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, INK_W, ink.h);
+  if (ink.bg !== 'blank') {
+    ctx.strokeStyle = '#dfe3ea'; ctx.lineWidth = 1.2; ctx.beginPath();
+    const g = ink.bg === 'grid' ? 50 : 56;
+    for (let y = g; y < ink.h; y += g) { ctx.moveTo(0, y); ctx.lineTo(INK_W, y); }
+    if (ink.bg === 'grid') for (let x = g; x < INK_W; x += g) { ctx.moveTo(x, 0); ctx.lineTo(x, ink.h); }
+    ctx.stroke();
+  }
+  for (const s of ink.strokes) drawStroke(s);
+  if (drawing) drawStroke(drawing);
+}
+
+function updInkUI() {
+  $$('#inkTools [data-tool]').forEach(b => b.classList.toggle('on', b.dataset.tool === tool));
+  $$('#inkTools [data-w]').forEach(b => b.classList.toggle('on', +b.dataset.w === pw));
+  $$('#dots .dot').forEach(b => b.classList.toggle('on', b.dataset.c === color));
+  $('#bgBtn').textContent = ink ? ({ blank: '空白', lines: '橫線', grid: '方格' })[ink.bg] : '橫線';
+  $('#undoBtn').disabled = !undoS.length; $('#redoBtn').disabled = !redoS.length;
+  cv.style.cursor = tool === 'hand' ? 'grab' : 'crosshair';
+}
+
+$$('#inkTools [data-tool]').forEach(b => b.onclick = () => { tool = b.dataset.tool; updInkUI(); });
+$$('#inkTools [data-w]').forEach(b => b.onclick = () => { pw = +b.dataset.w; updInkUI(); });
+$$('#dots .dot').forEach(b => b.onclick = () => { color = b.dataset.c; if (tool === 'eraser' || tool === 'hand') tool = 'pen'; updInkUI(); });
+$('#bgBtn').onclick = () => { ink.bg = ({ blank: 'lines', lines: 'grid', grid: 'blank' })[ink.bg]; touch(); redraw(); updInkUI(); };
+$('#moreBtn').onclick = () => { ink.h += 1000; touch(); sizeCanvas(); $('#inkWrap').scrollBy({ top: 600, behavior: 'smooth' }); };
+
+function pos(e) { const r = cv.getBoundingClientRect(); return [Math.round((e.clientX - r.left) / scale * 10) / 10, Math.round((e.clientY - r.top) / scale * 10) / 10]; }
+
+function eraseAt(pt) {
+  const R = 20 / Math.max(scale * 2.2, .3) * 1.0 + 8; // 邏輯單位
+  for (let i = ink.strokes.length - 1; i >= 0; i--) {
+    const s = ink.strokes[i];
+    if (s.p.some(q => Math.hypot(q[0] - pt[0], q[1] - pt[1]) < R + (s.t === 'h' ? s.w * 2.5 : s.w / 2))) {
+      erasing.push([i, s]); ink.strokes.splice(i, 1); redraw();
+    }
+  }
+}
+
+cv.addEventListener('pointerdown', e => {
+  if (e.pointerType === 'pen') hasPen = true;
+  touches.set(e.pointerId, { x: e.clientX, y: e.clientY, type: e.pointerType });
+  const fingers = [...touches.values()].filter(t => t.type === 'touch').length;
+  const pan = tool === 'hand' || (e.pointerType === 'touch' && (hasPen || fingers >= 2));
+  if (e.pointerType === 'touch' && fingers >= 2 && drawing) { drawing = null; redraw(); }
+  if (pan) { panLast = { x: e.clientX, y: e.clientY, id: e.pointerId }; cv.setPointerCapture(e.pointerId); return; }
+  if (e.pointerType === 'mouse' && e.button !== 0) return;
+  cv.setPointerCapture(e.pointerId);
+  const pt = pos(e);
+  if (tool === 'eraser') { erasing = []; eraseAt(pt); return; }
+  drawing = { t: tool === 'hl' ? 'h' : 'p', c: color, w: pw, p: [pt], id: e.pointerId };
+  redraw();
+});
+
+cv.addEventListener('pointermove', e => {
+  const t = touches.get(e.pointerId); if (!t) return;
+  t.x = e.clientX; t.y = e.clientY;
+  if (panLast && panLast.id === e.pointerId) { $('#inkWrap').scrollTop -= e.clientY - panLast.y; panLast.y = e.clientY; panLast.x = e.clientX; return; }
+  if (erasing) { eraseAt(pos(e)); return; }
+  if (!drawing || drawing.id !== e.pointerId) return;
+  const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
+  for (const ev of (evs.length ? evs : [e])) {
+    const pt = pos(ev), l = drawing.p[drawing.p.length - 1];
+    if (Math.hypot(pt[0] - l[0], pt[1] - l[1]) < .8) continue;
+    drawing.p.push(pt);
+    if (drawing.t === 'p') {
+      ctx.save(); ctx.lineCap = ctx.lineJoin = 'round'; ctx.strokeStyle = okColor(drawing.c); ctx.lineWidth = drawing.w;
+      ctx.beginPath(); ctx.moveTo(l[0], l[1]); ctx.lineTo(pt[0], pt[1]); ctx.stroke(); ctx.restore();
+    }
+  }
+  if (drawing.t === 'h') redraw();
+});
+
+function endPtr(e) {
+  touches.delete(e.pointerId);
+  if (panLast && panLast.id === e.pointerId) panLast = null;
+  if (erasing) {
+    if (erasing.length) { undoS.push({ a: 'del', items: erasing }); redoS = []; touch(); }
+    erasing = null; updInkUI(); return;
+  }
+  if (drawing && drawing.id === e.pointerId) {
+    const s = drawing; drawing = null; delete s.id;
+    if (e.type !== 'pointercancel') {
+      ink.strokes.push(s); undoS.push({ a: 'add', s }); redoS = [];
+      if (s.p.some(q => q[1] > ink.h - 160)) { ink.h += 700; sizeCanvas(); } else redraw();
+      touch();
+    } else redraw();
+    updInkUI();
+  }
+}
+cv.addEventListener('pointerup', endPtr);
+cv.addEventListener('pointercancel', endPtr);
+cv.addEventListener('contextmenu', e => e.preventDefault());
+
+function undo() {
+  const a = undoS.pop(); if (!a) return;
+  if (a.a === 'add') ink.strokes.pop();
+  else for (let k = a.items.length - 1; k >= 0; k--) ink.strokes.splice(a.items[k][0], 0, a.items[k][1]);
+  redoS.push(a); touch(); redraw(); updInkUI();
+}
+function redo() {
+  const a = redoS.pop(); if (!a) return;
+  if (a.a === 'add') ink.strokes.push(a.s);
+  else for (const it of a.items) ink.strokes.splice(it[0], 1);
+  undoS.push(a); touch(); redraw(); updInkUI();
+}
+$('#undoBtn').onclick = undo; $('#redoBtn').onclick = redo;
+
+/* ---------- 心智圖 ---------- */
+const NH = 36, GAPY = 14, GAPX = 48, MPAL = ['#2f6fed', '#e8590c', '#2b8a3e', '#ae3ec9', '#c2255c', '#0c8599'];
+const mctx = document.createElement('canvas').getContext('2d');
+const sv = $('#mm'), mg = $('#mmg');
+let M = null, sel = null, mpos = {}, lastTap = { id: null, t: 0 };
+
+const label = t => t.length > 18 ? t.slice(0, 18) + '…' : t;
+const measure = t => { mctx.font = '15px system-ui,"Noto Sans TC",sans-serif'; return Math.min(240, Math.max(64, mctx.measureText(label(t)).width + 28)); };
+
+function layout() {
+  const pos = {}; let leaf = 0;
+  (function rec(id, x) {
+    const n = M.nodes[id], w = measure(n.t), kids = n.col ? [] : n.ch;
+    let y;
+    if (!kids.length) { y = leaf * (NH + GAPY); leaf++; }
+    else { const ys = kids.map(k => rec(k, x + w + GAPX)); y = (ys[0] + ys[ys.length - 1]) / 2; }
+    pos[id] = { x, y, w }; return y;
+  })(M.root, 0);
+  return pos;
+}
+
+function colorOf(id) {
+  if (id === M.root) return null;
+  let n = M.nodes[id];
+  while (n.p !== M.root) n = M.nodes[n.p];
+  return MPAL[M.nodes[M.root].ch.indexOf(n.id) % MPAL.length];
+}
+
+function renderMind() {
+  mpos = layout();
+  let links = '', nodes = '';
+  for (const id in mpos) {
+    const n = M.nodes[id], p = mpos[id], c = colorOf(id), root = id === M.root;
+    for (const k of (n.col ? [] : n.ch)) {
+      const q = mpos[k], x1 = p.x + p.w, y1 = p.y + NH / 2, y2 = q.y + NH / 2;
+      links += `<path d="M${x1} ${y1}C${x1 + 24} ${y1} ${q.x - 24} ${y2} ${q.x} ${y2}" fill="none" stroke="${colorOf(k)}" stroke-width="2.5" stroke-linecap="round"/>`;
+    }
+    const stroke = id === sel ? 'var(--text)' : (c || 'var(--accent)');
+    nodes += `<g class="mn" data-id="${id}"><rect x="${p.x}" y="${p.y}" width="${p.w}" height="${NH}" rx="10" fill="${c || 'var(--accent)'}" fill-opacity="${root ? .92 : .16}" stroke="${stroke}" stroke-width="${id === sel ? 3 : 1.5}"/>` +
+      `<text x="${p.x + p.w / 2}" y="${p.y + NH / 2}" text-anchor="middle" dominant-baseline="central"${root ? ' style="fill:#fff"' : ''}>${esc(label(n.t))}</text>` +
+      (n.col && n.ch.length ? `<circle cx="${p.x + p.w + 11}" cy="${p.y + NH / 2}" r="10" fill="${c || 'var(--accent)'}"/><text x="${p.x + p.w + 11}" y="${p.y + NH / 2}" text-anchor="middle" dominant-baseline="central" style="font-size:11px;fill:#fff">${n.ch.length}</text>` : '') + '</g>';
+  }
+  mg.innerHTML = links + nodes;
+  const has = sel && M.nodes[sel], isRoot = sel === M.root;
+  $('#mChild').disabled = !has; $('#mSib').disabled = !has || isRoot; $('#mEdit').disabled = !has;
+  $('#mDel').disabled = !has || isRoot;
+  $('#mCol').disabled = !has || !M.nodes[sel].ch.length;
+  $('#mCol').textContent = has && M.nodes[sel].col ? '展開' : '折疊';
+}
+
+function applyView() { const v = M.v; mg.setAttribute('transform', `translate(${v.x} ${v.y}) scale(${v.k})`); }
+function fitView() {
+  const r = sv.getBoundingClientRect(), p = mpos[M.root];
+  M.v = { x: 20, y: r.height / 2 - (p.y + NH / 2), k: 1 };
+  applyView();
+}
+function startMind() {
+  M = cur.mind; sel = M.root;
+  renderMind();
+  requestAnimationFrame(() => { if (!M.v) { fitView(); } else applyView(); });
+}
+function mindChanged() { cur.updatedAt = Date.now(); persist(); renderMind(); }
+
+function openNode(id, isNew) {
+  const n = M.nodes[id]; if (!n) return;
+  $('#nodeInp').value = n.t; $('#nodeDlg').dataset.id = id;
+  $('#nodeDlg').showModal(); $('#nodeInp').select();
+}
+function saveNode() {
+  const id = $('#nodeDlg').dataset.id, n = M.nodes[id], v = $('#nodeInp').value.trim();
+  $('#nodeDlg').close();
+  if (n && v && v !== n.t) { n.t = v; mindChanged(); }
+}
+$('#nodeOk').onclick = saveNode;
+$('#nodeCancel').onclick = () => $('#nodeDlg').close();
+$('#nodeInp').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); saveNode(); } });
+
+$('#mChild').onclick = () => {
+  const p = M.nodes[sel]; if (!p) return;
+  const id = uid(); M.nodes[id] = { id, t: '新節點', p: sel, ch: [], col: false };
+  p.ch.push(id); p.col = false; sel = id; mindChanged(); openNode(id, true);
+};
+$('#mSib').onclick = () => {
+  if (!sel || sel === M.root) return;
+  const par = M.nodes[M.nodes[sel].p], id = uid();
+  M.nodes[id] = { id, t: '新節點', p: par.id, ch: [], col: false };
+  par.ch.splice(par.ch.indexOf(sel) + 1, 0, id); sel = id; mindChanged(); openNode(id, true);
+};
+$('#mEdit').onclick = () => { if (sel) openNode(sel); };
+$('#mCol').onclick = () => { const n = M.nodes[sel]; if (n && n.ch.length) { n.col = !n.col; mindChanged(); } };
+$('#mDel').onclick = () => {
+  if (!sel || sel === M.root) return;
+  const n = M.nodes[sel], all = [];
+  (function walk(id) { all.push(id); M.nodes[id].ch.forEach(walk); })(sel);
+  if (all.length > 1 && !confirm('這個節點底下還有 ' + (all.length - 1) + ' 個子節點,要一起刪除嗎?')) return;
+  const par = M.nodes[n.p]; par.ch = par.ch.filter(x => x !== sel);
+  all.forEach(id => delete M.nodes[id]);
+  sel = par.id; mindChanged();
+};
+
+function zoomAt(cx, cy, k2) {
+  const r = sv.getBoundingClientRect(), v = M.v;
+  k2 = Math.min(2.5, Math.max(.3, k2));
+  const wx = (cx - r.left - v.x) / v.k, wy = (cy - r.top - v.y) / v.k;
+  M.v = { k: k2, x: cx - r.left - wx * k2, y: cy - r.top - wy * k2 };
+  applyView();
+}
+$('#mIn').onclick = () => { const r = sv.getBoundingClientRect(); zoomAt(r.left + r.width / 2, r.top + r.height / 2, M.v.k * 1.25); persist(); };
+$('#mOut').onclick = () => { const r = sv.getBoundingClientRect(); zoomAt(r.left + r.width / 2, r.top + r.height / 2, M.v.k / 1.25); persist(); };
+$('#mFit').onclick = () => { fitView(); persist(); };
+
+const mp = new Map(); let mPan = null, mPinch = null, tapNode = null, mMoved = false;
+sv.addEventListener('pointerdown', e => {
+  sv.setPointerCapture(e.pointerId);
+  mp.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (mp.size === 1) { mPan = { x: e.clientX, y: e.clientY }; tapNode = e.target.closest ? e.target.closest('.mn') : null; mMoved = false; }
+  else if (mp.size === 2) {
+    tapNode = null; mMoved = true; mPan = null;
+    const [a, b] = [...mp.values()];
+    mPinch = { d: Math.hypot(a.x - b.x, a.y - b.y) || 1, k: M.v.k };
+  }
+});
+sv.addEventListener('pointermove', e => {
+  if (!mp.has(e.pointerId)) return;
+  mp.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (mp.size >= 2 && mPinch) {
+    const [a, b] = [...mp.values()];
+    zoomAt((a.x + b.x) / 2, (a.y + b.y) / 2, mPinch.k * Math.hypot(a.x - b.x, a.y - b.y) / mPinch.d);
+  } else if (mPan) {
+    const dx = e.clientX - mPan.x, dy = e.clientY - mPan.y;
+    if (!mMoved && Math.hypot(dx, dy) < 6) return;
+    mMoved = true; M.v.x += dx; M.v.y += dy; mPan = { x: e.clientX, y: e.clientY }; applyView();
+  }
+});
+function mEnd(e) {
+  mp.delete(e.pointerId);
+  if (mp.size === 1) { const r = [...mp.values()][0]; mPan = { x: r.x, y: r.y }; mPinch = null; mMoved = true; return; }
+  if (mp.size === 0) {
+    if (e.type === 'pointerup' && !mMoved) {
+      if (tapNode) {
+        const id = tapNode.dataset.id, now = Date.now();
+        if (lastTap.id === id && now - lastTap.t < 380) { sel = id; renderMind(); openNode(id); lastTap = { id: null, t: 0 }; }
+        else { sel = id; renderMind(); lastTap = { id, t: now }; }
+      } else { sel = null; renderMind(); }
+    } else persist();
+    mPan = null; mPinch = null; tapNode = null;
+  }
+}
+sv.addEventListener('pointerup', mEnd);
+sv.addEventListener('pointercancel', mEnd);
+sv.addEventListener('wheel', e => { if (!M) return; e.preventDefault(); zoomAt(e.clientX, e.clientY, M.v.k * (e.deltaY < 0 ? 1.1 : 1 / 1.1)); }, { passive: false });
 
 /* ---------- Google Drive 同步 ---------- */
 const cid = () => localStorage.getItem(CID_KEY) || '';
@@ -160,7 +602,7 @@ function getToken(interactive) {
     if (token && Date.now() < tokenExp - 60000) return resolve(token);
     if (!window.google || !google.accounts) return reject(new Error('Google 登入元件尚未載入,請確認網路'));
     if (!cid()) return reject(new Error('請先到 ⚙️ 設定填入 OAuth 用戶端 ID'));
-    tokenClient = google.accounts.oauth2.initTokenClient({
+    const tc = google.accounts.oauth2.initTokenClient({
       client_id: cid(),
       scope: 'https://www.googleapis.com/auth/drive.file',
       callback: r => {
@@ -171,7 +613,7 @@ function getToken(interactive) {
       },
       error_callback: e => reject(new Error(e.type || '授權失敗'))
     });
-    tokenClient.requestAccessToken({ prompt: interactive ? 'consent' : '' });
+    tc.requestAccessToken({ prompt: interactive ? 'consent' : '' });
   });
 }
 
@@ -203,18 +645,19 @@ async function sync(interactive) {
       try { remote = (await (await api(`https://www.googleapis.com/drive/v3/files/${id}?alt=media`)).json()).notes || []; } catch (e) { remote = []; }
     }
     commit();
+    const openId = cur && cur.id;
     notes = merge(notes, remote);
-    // 清掉超過 30 天的刪除標記
     const cutoff = Date.now() - 30 * 864e5;
     notes = notes.filter(n => !(n.deleted && n.updatedAt < cutoff));
+    if (openId) cur = notes.find(n => n.id === openId) || cur;
     persist(); render();
-    const body = JSON.stringify({ version: 1, notes });
+    const body = JSON.stringify({ version: 2, notes });
     if (id) {
       await api(`https://www.googleapis.com/upload/drive/v3/files/${id}?uploadType=media`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body });
     } else {
       const bd = 'b' + uid();
-      const mp = `--${bd}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify({ name: FILE, mimeType: 'application/json' })}\r\n--${bd}\r\nContent-Type: application/json\r\n\r\n${body}\r\n--${bd}--`;
-      await api('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', { method: 'POST', headers: { 'Content-Type': 'multipart/related; boundary=' + bd }, body: mp });
+      const mpart = `--${bd}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify({ name: FILE, mimeType: 'application/json' })}\r\n--${bd}\r\nContent-Type: application/json\r\n\r\n${body}\r\n--${bd}--`;
+      await api('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', { method: 'POST', headers: { 'Content-Type': 'multipart/related; boundary=' + bd }, body: mpart });
     }
     setStatus('已同步 ' + new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' }));
   } catch (e) {
@@ -225,7 +668,6 @@ async function sync(interactive) {
 function autoSync() {
   if (localStorage.getItem('cloudnotes.linked') && token && Date.now() < tokenExp - 60000) sync(false);
 }
-
 $('#syncBtn').onclick = () => sync(!token);
 
 /* ---------- 設定 / 匯出 ---------- */

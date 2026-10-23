@@ -1,4 +1,4 @@
-const CACHE = 'cloudnotes-v1';
+const CACHE = 'cloudnotes-v2';
 const ASSETS = ['./', './index.html', './manifest.webmanifest', './icon.svg', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
