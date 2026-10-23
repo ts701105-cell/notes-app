@@ -1,0 +1,17 @@
+{
+  "manifest_version": 3,
+  "name": "雲筆記網頁剪輯",
+  "version": "1.0.0",
+  "description": "把網頁文章、選取文字、截圖一鍵剪進你的雲筆記。",
+  "permissions": ["activeTab", "scripting", "storage", "contextMenus", "unlimitedStorage"],
+  "host_permissions": ["https://ts701105-cell.github.io/notes-app/*"],
+  "background": { "service_worker": "background.js" },
+  "action": { "default_title": "剪到雲筆記", "default_popup": "popup.html",
+    "default_icon": { "16": "icon-16.png", "32": "icon-32.png", "48": "icon-48.png", "128": "icon-128.png" } },
+  "icons": { "16": "icon-16.png", "32": "icon-32.png", "48": "icon-48.png", "128": "icon-128.png" },
+  "content_scripts": [{
+    "matches": ["https://ts701105-cell.github.io/notes-app/*"],
+    "js": ["bridge.js"],
+    "run_at": "document_idle"
+  }]
+}

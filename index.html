@@ -200,6 +200,7 @@ dialog .row{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
   <label for="cid">OAuth 用戶端 ID</label>
   <input id="cid" placeholder="xxxxxxxx.apps.googleusercontent.com" autocomplete="off">
   <div class="hint">到 Google Cloud Console 建立「網頁應用程式」類型的 OAuth 用戶端 ID,並把本 App 網址加入「已授權的 JavaScript 來源」。筆記會存成你雲端硬碟中的 notes-sync.json,App 只能存取它自己建立的檔案。</div>
+  <div class="hint">Chrome 網頁剪輯:<a href="cloudnotes-clipper.zip" download>下載擴充套件</a>,解壓縮後在 chrome://extensions 開啟「開發人員模式」→「載入未封裝項目」選擇該資料夾。</div>
   <div class="row">
     <button class="btn" id="logoutBtn">登出</button>
     <button class="btn" id="exportBtn">匯出備份</button>
@@ -208,7 +209,7 @@ dialog .row{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
   </div>
 </dialog>
 
-<div class="meta" id="metaBar"><button class="chip" id="nbPick">📓 未分類</button><span id="metaTags" style="display:contents"></span><button class="chip" id="tagAdd">＋標籤</button></div>
+<div class="meta" id="metaBar"><button class="chip" id="nbPick">📓 未分類</button><span id="metaTags" style="display:contents"></span><button class="chip" id="tagAdd">＋標籤</button><a class="chip" id="srcLink" target="_blank" rel="noopener" hidden>🔗 原網頁</a></div>
 
 <dialog id="nbDlg"><h2>放進哪個記事本?</h2><div id="nbList"></div><div class="row"><button class="btn" id="nbClose">關閉</button></div></dialog>
 <dialog id="tagDlg">
@@ -850,6 +851,8 @@ function renderMeta() {
   const tg = cur.tags || [];
   $('#metaTags').innerHTML = tg.map(t => `<button class="chip tag on">#${esc(t)}</button>`).join('');
   $('#tagAdd').textContent = tg.length ? '✎ 標籤' : '＋標籤';
+  const sl = $('#srcLink'), ok = cur.src && /^https?:\/\//i.test(cur.src);
+  sl.hidden = !ok; if (ok) sl.href = cur.src;
 }
 function touchCur() { cur.updatedAt = Date.now(); persist(); }
 
@@ -1070,6 +1073,40 @@ function showGate() {
   };
 }
 document.getElementById('logoutBtn').onclick = () => { try { localStorage.removeItem(AUTH_KEY); sessionStorage.removeItem(AUTH_KEY); } catch (e) {} location.reload(); };
+
+/* ---------- 網頁剪輯(接收 Chrome 擴充套件傳來的內容) ---------- */
+let clipsInit = false;
+function importClip(c) {
+  if (!c || typeof c.id !== 'string') throw new Error('bad clip');
+  let seen = []; try { seen = JSON.parse(localStorage.getItem('cloudnotes.clips') || '[]'); } catch (e) {}
+  if (seen.includes(c.id)) return;
+  const nb = createNb('網頁剪輯');
+  const url = typeof c.url === 'string' && /^https?:\/\//i.test(c.url) ? c.url.slice(0, 2000) : '';
+  const n = { id: uid(), type: 'text', title: String(c.title || url || '網頁剪輯').slice(0, 200), body: '', tags: ['網頁剪輯'], nb: nb.id, src: url, updatedAt: Date.now(), deleted: false };
+  for (const t of Array.isArray(c.tags) ? c.tags : []) { const v = String(t).trim().replace(/^[#＃]+/, '').slice(0, 20); if (v && n.tags.length < 10 && !n.tags.some(x => x.toLowerCase() === v.toLowerCase())) n.tags.push(v); }
+  if (c.kind === 'shot') {
+    if (typeof c.img !== 'string' || !c.img.startsWith('data:image/jpeg;base64,') || c.img.length > 8e6) throw new Error('bad image');
+    const w = 960, h = Math.min(7000, Math.max(40, Math.round(w * (+c.h || 1) / (+c.w || 1))));
+    n.type = 'ink';
+    n.ink = { h: h + 60, bg: 'blank', strokes: [], imgs: [{ id: uid(), x: 20, y: 20, w, h, d: c.img }] };
+    n.body = [url && '🔗 ' + url, c.note && '📝 ' + c.note].filter(Boolean).join('\n');
+  } else {
+    n.body = (url ? '🔗 ' + url + '\n' : '') + '🕒 ' + fmt(Date.now()) + (c.note ? '\n📝 ' + String(c.note).slice(0, 2000) : '') + '\n\n' + String(c.text || '').slice(0, 100000);
+  }
+  notes.push(n);
+  seen.unshift(c.id); try { localStorage.setItem('cloudnotes.clips', JSON.stringify(seen.slice(0, 200))); } catch (e) {}
+  persist(); render(); toast('已從網頁剪輯一則筆記到「網頁剪輯」記事本');
+}
+function initClips() {
+  if (clipsInit) return; clipsInit = true;
+  window.addEventListener('message', e => {
+    const d = e.data;
+    if (e.source !== window || e.origin !== location.origin || !d || d.src !== 'cloudnotes-ext' || d.type !== 'clip') return;
+    try { importClip(d.clip); } catch (x) { console.warn('clip rejected', x); }
+    if (d.clip && typeof d.clip.id === 'string') window.postMessage({ src: 'cloudnotes-app', type: 'ack', id: d.clip.id }, location.origin);
+  });
+  window.postMessage({ src: 'cloudnotes-app', type: 'ready' }, location.origin);
+}
 async function bootApp() {
   let v;
   try { v = await idb.get('notes'); } catch (e) {}
@@ -1079,6 +1116,7 @@ async function bootApp() {
   if (!Array.isArray(v)) flush();
   render();
   setStatus(localStorage.getItem('cloudnotes.linked') ? '已顯示本機筆記 · 點 ☁️ 同步雲端' : '點右上角 ☁️ 連接 Google Drive,即可跨裝置同步');
+  initClips();
 }
 if (authed()) bootApp(); else showGate();
 // 開啟後第一次點畫面時,自動同步一次(瀏覽器需要使用者操作才允許開登入視窗)
