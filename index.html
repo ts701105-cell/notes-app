@@ -435,7 +435,9 @@ function noteIn(n) {
   if (view.nb === 'none') return !nbOf(n);
   return n.nb === view.nb && !!nbOf(n);
 }
-const hasTag = n => !view.tag || (n.tags || []).some(t => t.toLowerCase() === view.tag);
+const TYPE_TAG = { text: '文字', ink: '手寫', mind: '心智圖' };
+const tagsOf = n => { const tt = TYPE_TAG[typeOf(n)], o = (n.tags || []).filter(t => t.toLowerCase() !== tt.toLowerCase()); return [tt, ...o]; };
+const hasTag = n => !view.tag || tagsOf(n).some(t => t.toLowerCase() === view.tag);
 const closeMenu = () => $('#app').classList.remove('menu');
 $('#menuBtn').onclick = () => $('#app').classList.toggle('menu');
 $('#scrim').onclick = closeMenu;
@@ -446,7 +448,7 @@ function renderNav() {
   const cnt = { all: live.length, pin: live.filter(n => n.pin).length, none: live.filter(n => !nbOf(n)).length, trash: notes.filter(inTrash).length };
   for (const b of liveNbs()) cnt[b.id] = live.filter(n => n.nb === b.id).length;
   const tg = new Map();
-  for (const n of live) for (const t of n.tags || []) { const k = t.toLowerCase(), o = tg.get(k) || { t, c: 0 }; o.c++; tg.set(k, o); }
+  for (const n of live) for (const t of tagsOf(n)) { const k = t.toLowerCase(), o = tg.get(k) || { t, c: 0 }; o.c++; tg.set(k, o); }
   if (view.tag && !tg.has(view.tag)) view.tag = null;
   const item = (v, ico, name, c) => `<button class="ni${view.nb === v && !view.tag ? ' on' : ''}" data-nb="${esc(v)}"><span class="ico">${ico}</span><span class="nn">${esc(name)}</span><span class="c">${c || ''}</span></button>`;
   let h = item('all', '📒', '全部筆記', cnt.all) + item('pin', '📌', '置頂', cnt.pin);
@@ -511,7 +513,7 @@ function render() {
   if (!loaded) return;
   renderNav();
   const q = $('#search').value.trim().toLowerCase();
-  const text = n => (n.title + ' ' + (typeOf(n) === 'mind' ? Object.values(n.mind.nodes).map(x => x.t).join(' ') : n.body || '') + ' ' + (n.tags || []).join(' ') + ' ' + nbName(n)).toLowerCase();
+  const text = n => (n.title + ' ' + (typeOf(n) === 'mind' ? Object.values(n.mind.nodes).map(x => x.t).join(' ') : n.body || '') + ' ' + tagsOf(n).join(' ') + ' ' + nbName(n)).toLowerCase();
   const key = view.sort || 'upd';
   const items = notes.filter(n => noteIn(n) && hasTag(n) && (!q || text(n).includes(q)));
   items.sort((a, b) => ((b.pin ? 1 : 0) - (a.pin ? 1 : 0)) * (view.nb === 'trash' ? 0 : 1) ||
@@ -543,7 +545,7 @@ function render() {
     else { const p = document.createElement('p'); p.textContent = (n.mind.nodes[n.mind.root].t || '') + ' · 共 ' + Object.keys(n.mind.nodes).length + ' 個節點'; cm.append(p); th = document.createElement('div'); th.className = 'nth'; th.textContent = '🧠'; }
     const s = document.createElement('small'); s.textContent = fmt(n.updatedAt) + (view.nb !== 'trash' && nbOf(n) && !(SPECIAL.indexOf(view.nb) < 0) ? ' · 📓 ' + nbOf(n).name : '');
     cm.append(s);
-    if ((n.tags || []).length) { const g = document.createElement('div'); g.className = 'tags'; g.innerHTML = n.tags.map(x => `<span class="tg">#${esc(x)}</span>`).join(''); cm.append(g); }
+    { const g = document.createElement('div'); g.className = 'tags'; g.innerHTML = tagsOf(n).map(x => `<span class="tg">#${esc(x)}</span>`).join(''); cm.append(g); }
     if (view.nb === 'trash') {
       const ta = document.createElement('div'); ta.className = 'ta';
       const r = document.createElement('button'); r.className = 'btn p'; r.textContent = '還原'; r.onclick = ev => { ev.stopPropagation(); restoreNote(n); };
@@ -564,7 +566,7 @@ const fmtFull = ts => new Date(ts).toLocaleString('zh-TW', { year: 'numeric', mo
 
 function newNote(type) {
   const n = { id: uid(), type, title: '', body: '', tags: [], nb: (!SPECIAL.includes(view.nb) && nbs.some(x => x.id === view.nb && !x.deleted)) ? view.nb : null, created: Date.now(), updatedAt: Date.now(), deleted: false };
-  if (view.tag) { const o = allTags().find(t => t.toLowerCase() === view.tag); if (o) n.tags.push(o); }
+  if (view.tag) { const o = allTags().find(t => t.toLowerCase() === view.tag); if (o && !Object.values(TYPE_TAG).includes(o)) n.tags.push(o); }
   if (type === 'ink') n.ink = { h: 1400, bg: 'lines', strokes: [] };
   if (type === 'mind') { const r = uid(); n.mind = { root: r, nodes: { [r]: { id: r, t: '中心主題', p: null, ch: [], col: false } }, v: null }; }
   notes.push(n);
@@ -1208,7 +1210,7 @@ function createNb(name) {
 }
 function allTags() {
   const m = new Map();
-  for (const n of notes) if (!n.deleted) for (const t of n.tags || []) { const k = t.toLowerCase(), o = m.get(k) || { t, c: 0 }; o.c++; m.set(k, o); }
+  for (const n of notes) if (!n.deleted) for (const t of tagsOf(n)) { const k = t.toLowerCase(), o = m.get(k) || { t, c: 0 }; o.c++; m.set(k, o); }
   return [...m.values()].sort((a, b) => b.c - a.c).map(o => o.t);
 }
 
@@ -1242,7 +1244,7 @@ function renderMeta() {
   $('#lockBtn').textContent = cur.lock ? '🔒 已鎖定' : '🔓 鎖定'; $('#lockBtn').classList.toggle('on', !!cur.lock);
   $$('[data-pin]').forEach(b => b.classList.toggle('on', !!cur.pin));
   const tg = cur.tags || [];
-  $('#metaTags').innerHTML = tg.map(t => `<button class="chip tag on">#${esc(t)}</button>`).join('');
+  $('#metaTags').innerHTML = tagsOf(cur).map(t => `<button class="chip tag on">#${esc(t)}</button>`).join('');
   $('#tagAdd').textContent = tg.length ? '✎ 標籤' : '＋標籤';
   const sl = $('#srcLink'), ok = cur.src && /^https?:\/\//i.test(cur.src);
   sl.hidden = !ok; if (ok) sl.href = cur.src;
@@ -1500,7 +1502,7 @@ const EX_CSS = `.x{width:800px;padding:48px 52px 56px;background:#fff;color:#262
 .x ul.todo>li.done::before{content:"✓";background:#00a82d;border-color:#00a82d;color:#fff;font-size:12px;line-height:13px;text-align:center}
 .x ul.todo>li.done{color:#6e7681;text-decoration:line-through}`;
 const EX_FONT = 'system-ui,-apple-system,"Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif';
-const noteMeta = n => [nbOf(n) ? '📓 ' + nbName(n) : '', (n.tags || []).map(t => '#' + t).join(' '), '更新於 ' + fmtFull(n.updatedAt), n.src || ''].filter(Boolean).join('  ·  ');
+const noteMeta = n => [nbOf(n) ? '📓 ' + nbName(n) : '', tagsOf(n).map(t => '#' + t).join(' '), '更新於 ' + fmtFull(n.updatedAt), n.src || ''].filter(Boolean).join('  ·  ');
 const loadImg = src => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('圖片載入失敗')); i.src = src; });
 
 async function rasterSvg(svg, W, H) {
