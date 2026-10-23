@@ -65,6 +65,13 @@ dialog .row{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
 .nt span{font-size:24px}
 .nt small{display:block;color:var(--sub);font-size:12px}
 .tb.rec{background:var(--danger);color:#fff}
+#gate{position:fixed;inset:0;z-index:99;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:24px}
+#gate[hidden]{display:none}
+#gateForm{width:100%;max-width:340px;display:flex;flex-direction:column;gap:12px;text-align:center}
+#gateForm h1{margin:0;font-size:22px}.gicon{font-size:44px}
+#gateForm input[type=text],#gateForm input[type=password],#gUser,#gPass{width:100%;box-sizing:border-box;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:inherit;font-size:16px}
+.gchk{font-size:13px;color:var(--sub);display:flex;gap:6px;align-items:center;justify-content:center}
+#gErr{color:var(--danger);font-size:13px;min-height:18px}
 .chips{display:flex;gap:6px;overflow-x:auto;padding:8px 0 0;scrollbar-width:none}
 .chips::-webkit-scrollbar{display:none}
 .chip{flex:none;padding:6px 12px;border-radius:999px;background:var(--card);border:1px solid var(--line);font-size:13px;white-space:nowrap}
@@ -81,6 +88,16 @@ dialog .row{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
 </style>
 </head>
 <body>
+<div id="gate" hidden>
+  <form id="gateForm" autocomplete="on">
+    <div class="gicon">📒</div><h1>雲筆記</h1>
+    <input id="gUser" name="username" autocomplete="username" placeholder="帳號" autocapitalize="off" spellcheck="false">
+    <input id="gPass" name="password" type="password" autocomplete="current-password" placeholder="密碼">
+    <label class="gchk"><input type="checkbox" id="gKeep" checked> 在這個裝置保持登入</label>
+    <div id="gErr"></div>
+    <button class="btn p" type="submit" style="width:100%">登入</button>
+  </form>
+</div>
 <header>
   <div class="bar">
     <h1>雲筆記</h1>
@@ -184,6 +201,7 @@ dialog .row{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
   <input id="cid" placeholder="xxxxxxxx.apps.googleusercontent.com" autocomplete="off">
   <div class="hint">到 Google Cloud Console 建立「網頁應用程式」類型的 OAuth 用戶端 ID,並把本 App 網址加入「已授權的 JavaScript 來源」。筆記會存成你雲端硬碟中的 notes-sync.json,App 只能存取它自己建立的檔案。</div>
   <div class="row">
+    <button class="btn" id="logoutBtn">登出</button>
     <button class="btn" id="exportBtn">匯出備份</button>
     <button class="btn" id="cancel">取消</button>
     <button class="btn p" id="save">儲存</button>
@@ -1027,7 +1045,32 @@ $('#exportBtn').onclick = () => {
 };
 
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
-(async () => {
+
+/* ---------- 登入 ---------- */
+const AUTH = { salt: '1cfhKjwM1Wx4xA9Fn4AjAA==', it: 150000, hash: 'ipPzEwHvgB0RNhx8svfN9VZ/imFwCVfmPH9vqH5Sy1c=' };
+const AUTH_KEY = 'cloudnotes.auth';
+const b64 = u8 => btoa(String.fromCharCode(...u8));
+async function authHash(u, p) {
+  const k = await crypto.subtle.importKey('raw', new TextEncoder().encode(u + '\n' + p), 'PBKDF2', false, ['deriveBits']);
+  const salt = Uint8Array.from(atob(AUTH.salt), c => c.charCodeAt(0));
+  return b64(new Uint8Array(await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt, iterations: AUTH.it }, k, 256)));
+}
+const authed = () => { try { return (localStorage.getItem(AUTH_KEY) || sessionStorage.getItem(AUTH_KEY)) === AUTH.hash; } catch (e) { return false; } };
+function showGate() {
+  const g = document.getElementById('gate'); g.hidden = false;
+  document.getElementById('gateForm').onsubmit = async e => {
+    e.preventDefault();
+    const err = document.getElementById('gErr'); err.textContent = '';
+    try {
+      const h = await authHash(document.getElementById('gUser').value.trim(), document.getElementById('gPass').value);
+      if (h !== AUTH.hash) { err.textContent = '帳號或密碼錯誤'; document.getElementById('gPass').value = ''; return; }
+      try { (document.getElementById('gKeep').checked ? localStorage : sessionStorage).setItem(AUTH_KEY, h); } catch (x) {}
+      g.hidden = true; document.getElementById('gPass').value = ''; bootApp();
+    } catch (x) { err.textContent = '無法驗證,請使用 https 網址開啟'; }
+  };
+}
+document.getElementById('logoutBtn').onclick = () => { try { localStorage.removeItem(AUTH_KEY); sessionStorage.removeItem(AUTH_KEY); } catch (e) {} location.reload(); };
+async function bootApp() {
   let v;
   try { v = await idb.get('notes'); } catch (e) {}
   if (Array.isArray(v)) notes = v;
@@ -1036,7 +1079,8 @@ if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
   if (!Array.isArray(v)) flush();
   render();
   setStatus(localStorage.getItem('cloudnotes.linked') ? '已顯示本機筆記 · 點 ☁️ 同步雲端' : '點右上角 ☁️ 連接 Google Drive,即可跨裝置同步');
-})();
+}
+if (authed()) bootApp(); else showGate();
 // 開啟後第一次點畫面時,自動同步一次(瀏覽器需要使用者操作才允許開登入視窗)
 let firstTap = true;
 document.addEventListener('pointerdown', () => {
