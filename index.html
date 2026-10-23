@@ -64,6 +64,11 @@ dialog .row{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
 .nt{display:flex;align-items:center;gap:12px;width:100%;padding:14px;border-radius:12px;background:var(--bg);margin-top:8px;text-align:left;font-size:16px}
 .nt span{font-size:24px}
 .nt small{display:block;color:var(--sub);font-size:12px}
+.tb.rec{background:var(--danger);color:#fff}
+.tb[hidden]{display:none}
+.inrow{display:flex;gap:6px;align-items:center}
+.inrow input{flex:1}
+#toast{position:fixed;left:50%;bottom:calc(90px + env(safe-area-inset-bottom));transform:translateX(-50%);background:rgba(30,30,30,.92);color:#fff;padding:10px 16px;border-radius:12px;font-size:14px;z-index:50;max-width:88vw;text-align:center;display:none}
 </style>
 </head>
 <body>
@@ -84,6 +89,8 @@ dialog .row{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
   <div class="bar">
     <button class="ib" data-back aria-label="返回">←</button>
     <span style="flex:1"></span>
+    <button class="tb" id="langBtn">中文</button>
+    <button class="tb" id="micBtn" aria-label="語音輸入">🎤</button>
     <button class="ib" data-del aria-label="刪除">🗑️</button>
   </div>
   <input id="etitle" placeholder="標題">
@@ -105,12 +112,20 @@ dialog .row{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
     <button class="tb" data-tool="hl">🖍️ 螢光</button>
     <button class="tb" data-tool="eraser">🧽 橡皮</button>
     <button class="tb" data-tool="hand">✋ 移動</button>
+    <button class="tb" data-tool="img">🖼️ 移圖</button>
     <span class="sep"></span>
     <span id="dots"></span>
     <span class="sep"></span>
     <button class="tb" data-w="3">細</button>
     <button class="tb on" data-w="5">中</button>
     <button class="tb" data-w="9">粗</button>
+    <button class="tb on" id="prBtn">壓感</button>
+    <span class="sep"></span>
+    <button class="tb" id="imgBtn">＋圖片</button>
+    <button class="tb" id="imgSm" hidden>圖－</button>
+    <button class="tb" id="imgBg" hidden>圖＋</button>
+    <button class="tb" id="imgDel" hidden>刪圖</button>
+    <input type="file" id="imgFile" accept="image/*" multiple hidden>
     <span class="sep"></span>
     <button class="tb" id="bgBtn">橫線</button>
     <button class="tb" id="moreBtn">＋頁</button>
@@ -148,7 +163,7 @@ dialog .row{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
 
 <dialog id="nodeDlg">
   <h2>節點文字</h2>
-  <input id="nodeInp" maxlength="200" autocomplete="off">
+  <div class="inrow"><input id="nodeInp" maxlength="200" autocomplete="off"><button class="tb" id="nodeMic" aria-label="語音輸入">🎤</button></div>
   <div class="row"><button class="btn" id="nodeCancel">取消</button><button class="btn p" id="nodeOk">確定</button></div>
 </dialog>
 
@@ -164,16 +179,30 @@ dialog .row{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
   </div>
 </dialog>
 
+<div id="toast"></div>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script>
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 const KEY = 'cloudnotes.v1', CID_KEY = 'cloudnotes.cid', FILE = 'notes-sync.json';
 let notes = [];
-try { notes = JSON.parse(localStorage.getItem(KEY) || '[]'); } catch (e) { notes = []; }
 let cur = null, token = null, tokenExp = 0, saveTimer = null, pushed = false;
 
-const persist = () => { try { localStorage.setItem(KEY, JSON.stringify(notes)); } catch (e) { setStatus('儲存空間不足'); } };
+const idb = {
+  open() { return new Promise((res, rej) => { const r = indexedDB.open('cloudnotes', 1); r.onupgradeneeded = () => r.result.createObjectStore('kv'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); },
+  async get(k) { const db = await this.open(); return new Promise((res, rej) => { const q = db.transaction('kv').objectStore('kv').get(k); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); }); },
+  async set(k, v) { const db = await this.open(); return new Promise((res, rej) => { const t = db.transaction('kv', 'readwrite'); t.objectStore('kv').put(v, k); t.oncomplete = () => res(); t.onerror = () => rej(t.error); t.onabort = () => rej(t.error); }); }
+};
+let wT = null, loaded = false;
+function flush() {
+  clearTimeout(wT);
+  if (!loaded) return;
+  idb.set('notes', notes).then(() => { try { localStorage.removeItem(KEY); } catch (e) {} })
+    .catch(() => { try { localStorage.setItem(KEY, JSON.stringify(notes)); } catch (e) { setStatus('儲存空間不足'); } });
+}
+const persist = () => { clearTimeout(wT); wT = setTimeout(flush, 250); };
+addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flush(); });
+addEventListener('pagehide', flush);
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 const setStatus = t => $('#status').textContent = t || '';
 const fmt = ts => new Date(ts).toLocaleString('zh-TW', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
@@ -182,11 +211,17 @@ const okColor = c => /^#[0-9a-f]{6}$/i.test(c) ? c : '#1d2129';
 const typeOf = n => n.type || 'text';
 const touch = () => { if (cur) { cur.updatedAt = Date.now(); persist(); } };
 const touchSoon = () => { clearTimeout(saveTimer); saveTimer = setTimeout(touch, 400); };
+let toastT = null;
+function toast(t) { const el = $('#toast'); el.textContent = t; el.style.display = 'block'; clearTimeout(toastT); toastT = setTimeout(() => { el.style.display = 'none'; }, 2800); }
 
 /* ---------- 列表 ---------- */
 function inkThumb(n) {
   const strokes = (n.ink && n.ink.strokes) || [];
   const H = 460; let d = '';
+  for (const m of (n.ink && n.ink.imgs) || []) {
+    if (m.y < H + 40 && /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+\/=]+$/.test(m.d))
+      d += `<image href="${m.d}" x="${Math.round(m.x)}" y="${Math.round(m.y)}" width="${Math.round(m.w)}" height="${Math.round(m.h)}"/>`;
+  }
   for (const s of strokes) {
     if (!s.p || !s.p.length || s.p[0][1] > H + 40) continue;
     const c = okColor(s.c), w = (s.t === 'h' ? s.w * 5 : s.w) || 4, op = s.t === 'h' ? .38 : 1;
@@ -261,6 +296,7 @@ function commit() {
 }
 
 function closeEditor() {
+  stopVoice();
   clearTimeout(saveTimer);
   commit();
   if (cur && !cur.deleted && isEmpty(cur)) notes = notes.filter(n => n.id !== cur.id);
@@ -297,8 +333,9 @@ let undoS = [], redoS = [], drawing = null, erasing = null, touches = new Map(),
 $('#dots').style.display = 'contents';
 $('#dots').innerHTML = PALETTE.map((c, i) => `<button class="dot${i ? '' : ' on'}" data-c="${c}" style="background:${c}" aria-label="顏色"></button>`).join('');
 
+let usePr = localStorage.getItem('cloudnotes.pr') !== '0', imgSel = null, imgDrag = null;
 function startInk() {
-  ink = cur.ink; undoS = []; redoS = []; drawing = null; erasing = null; touches.clear();
+  ink = cur.ink; if (!ink.imgs) ink.imgs = []; imgSel = null; imgDrag = null; undoS = []; redoS = []; drawing = null; erasing = null; touches.clear();
   $('#inkWrap').scrollTop = 0;
   sizeCanvas(); updInkUI();
 }
@@ -314,13 +351,22 @@ function sizeCanvas() {
 }
 addEventListener('resize', () => { if (cur && cur.ink) sizeCanvas(); });
 
+const prW = pr => .35 + 1.3 * pr;
 function drawStroke(s) {
   const p = s.p; if (!p || !p.length) return;
   ctx.save();
   ctx.lineCap = ctx.lineJoin = 'round';
   ctx.strokeStyle = ctx.fillStyle = okColor(s.c);
-  ctx.lineWidth = s.t === 'h' ? s.w * 5 : s.w;
   ctx.globalAlpha = s.t === 'h' ? .38 : 1;
+  if (s.pv && s.t !== 'h') {
+    if (p.length === 1) { ctx.beginPath(); ctx.arc(p[0][0], p[0][1], s.w * prW(p[0][2] || .5) / 2, 0, 6.2832); ctx.fill(); }
+    else for (let i = 1; i < p.length; i++) {
+      ctx.lineWidth = s.w * prW(((p[i - 1][2] || .5) + (p[i][2] || .5)) / 2);
+      ctx.beginPath(); ctx.moveTo(p[i - 1][0], p[i - 1][1]); ctx.lineTo(p[i][0], p[i][1]); ctx.stroke();
+    }
+    ctx.restore(); return;
+  }
+  ctx.lineWidth = s.t === 'h' ? s.w * 5 : s.w;
   ctx.beginPath();
   if (p.length === 1) { ctx.arc(p[0][0], p[0][1], ctx.lineWidth / 2, 0, 6.2832); ctx.fill(); }
   else {
@@ -329,6 +375,17 @@ function drawStroke(s) {
     const l = p[p.length - 1]; ctx.lineTo(l[0], l[1]); ctx.stroke();
   }
   ctx.restore();
+}
+
+const imgCache = new Map();
+function getImg(m) {
+  let im = imgCache.get(m.id);
+  if (!im) {
+    im = new Image(); im.onload = () => redraw();
+    if (/^data:image\/(jpeg|png|webp);base64,/.test(m.d)) im.src = m.d;
+    imgCache.set(m.id, im);
+  }
+  return im;
 }
 
 function redraw() {
@@ -342,29 +399,81 @@ function redraw() {
     if (ink.bg === 'grid') for (let x = g; x < INK_W; x += g) { ctx.moveTo(x, 0); ctx.lineTo(x, ink.h); }
     ctx.stroke();
   }
+  for (const m of ink.imgs || []) { const im = getImg(m); if (im.complete && im.naturalWidth) ctx.drawImage(im, m.x, m.y, m.w, m.h); }
   for (const s of ink.strokes) drawStroke(s);
   if (drawing) drawStroke(drawing);
+  if (tool === 'img' && imgSel) {
+    const m = (ink.imgs || []).find(x => x.id === imgSel);
+    if (m) { ctx.save(); ctx.strokeStyle = '#2f6fed'; ctx.lineWidth = 3 / scale; ctx.setLineDash([10 / scale, 6 / scale]); ctx.strokeRect(m.x, m.y, m.w, m.h); ctx.restore(); }
+  }
 }
 
 function updInkUI() {
   $$('#inkTools [data-tool]').forEach(b => b.classList.toggle('on', b.dataset.tool === tool));
   $$('#inkTools [data-w]').forEach(b => b.classList.toggle('on', +b.dataset.w === pw));
   $$('#dots .dot').forEach(b => b.classList.toggle('on', b.dataset.c === color));
+  $('#prBtn').classList.toggle('on', usePr);
+  const showImg = tool === 'img' && !!imgSel;
+  ['#imgSm', '#imgBg', '#imgDel'].forEach(s => { $(s).hidden = !showImg; });
   $('#bgBtn').textContent = ink ? ({ blank: '空白', lines: '橫線', grid: '方格' })[ink.bg] : '橫線';
   $('#undoBtn').disabled = !undoS.length; $('#redoBtn').disabled = !redoS.length;
-  cv.style.cursor = tool === 'hand' ? 'grab' : 'crosshair';
+  cv.style.cursor = tool === 'hand' ? 'grab' : tool === 'img' ? 'move' : 'crosshair';
 }
 
-$$('#inkTools [data-tool]').forEach(b => b.onclick = () => { tool = b.dataset.tool; updInkUI(); });
+$$('#inkTools [data-tool]').forEach(b => b.onclick = () => { tool = b.dataset.tool; if (tool !== 'img') imgSel = null; updInkUI(); redraw(); });
 $$('#inkTools [data-w]').forEach(b => b.onclick = () => { pw = +b.dataset.w; updInkUI(); });
-$$('#dots .dot').forEach(b => b.onclick = () => { color = b.dataset.c; if (tool === 'eraser' || tool === 'hand') tool = 'pen'; updInkUI(); });
+$$('#dots .dot').forEach(b => b.onclick = () => { color = b.dataset.c; if (tool === 'eraser' || tool === 'hand' || tool === 'img') { tool = 'pen'; imgSel = null; redraw(); } updInkUI(); });
+$('#prBtn').onclick = () => { usePr = !usePr; localStorage.setItem('cloudnotes.pr', usePr ? '1' : '0'); updInkUI(); toast(usePr ? '壓感已開啟(觸控筆用力越大線條越粗)' : '壓感已關閉'); };
 $('#bgBtn').onclick = () => { ink.bg = ({ blank: 'lines', lines: 'grid', grid: 'blank' })[ink.bg]; touch(); redraw(); updInkUI(); };
 $('#moreBtn').onclick = () => { ink.h += 1000; touch(); sizeCanvas(); $('#inkWrap').scrollBy({ top: 600, behavior: 'smooth' }); };
 
+/* 圖片 */
+async function addImageFile(file) {
+  if (!ink || !file || !/^image\//.test(file.type)) { toast('這不是圖片檔'); return; }
+  toast('處理圖片中…');
+  try {
+    const url = URL.createObjectURL(file);
+    const im = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('無法讀取這張圖片(可能格式不支援)')); i.src = url; });
+    const k = Math.min(1, 1400 / Math.max(im.naturalWidth, im.naturalHeight));
+    const c = document.createElement('canvas');
+    c.width = Math.max(1, Math.round(im.naturalWidth * k)); c.height = Math.max(1, Math.round(im.naturalHeight * k));
+    const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(im, 0, 0, c.width, c.height);
+    URL.revokeObjectURL(url);
+    const d = c.toDataURL('image/jpeg', .78);
+    const w = 760, h = w * c.height / c.width;
+    const y = Math.max(20, Math.round($('#inkWrap').scrollTop / scale + 30));
+    if (y + h + 120 > ink.h) ink.h = Math.ceil(y + h + 200);
+    const m = { id: uid(), x: (INK_W - w) / 2, y, w, h: Math.round(h), d };
+    (ink.imgs || (ink.imgs = [])).push(m);
+    imgSel = m.id; tool = 'img'; touch(); sizeCanvas(); updInkUI(); toast('圖片已加入,可拖曳移動');
+  } catch (e) { toast(e.message || '圖片加入失敗'); }
+}
+$('#imgBtn').onclick = () => $('#imgFile').click();
+$('#imgFile').onchange = async e => { for (const f of [...e.target.files]) await addImageFile(f); e.target.value = ''; };
+function curImg() { return (ink.imgs || []).find(x => x.id === imgSel); }
+function scaleImg(f) {
+  const m = curImg(); if (!m) return;
+  const cx = m.x + m.w / 2, cy = m.y + m.h / 2, w = Math.min(1400, Math.max(80, m.w * f)), h = m.h * (w / m.w);
+  m.x = cx - w / 2; m.y = cy - h / 2; m.w = w; m.h = Math.round(h); touch(); redraw();
+}
+$('#imgSm').onclick = () => scaleImg(.85);
+$('#imgBg').onclick = () => scaleImg(1.18);
+$('#imgDel').onclick = () => {
+  const m = curImg(); if (!m) return;
+  ink.imgs = ink.imgs.filter(x => x !== m); imgCache.delete(m.id); imgSel = null; touch(); redraw(); updInkUI();
+};
+function imgAt(pt) {
+  const a = ink.imgs || [];
+  for (let i = a.length - 1; i >= 0; i--) { const m = a[i]; if (pt[0] >= m.x && pt[0] <= m.x + m.w && pt[1] >= m.y && pt[1] <= m.y + m.h) return m; }
+  return null;
+}
+
 function pos(e) { const r = cv.getBoundingClientRect(); return [Math.round((e.clientX - r.left) / scale * 10) / 10, Math.round((e.clientY - r.top) / scale * 10) / 10]; }
+const prOf = e => (usePr && e.pointerType === 'pen' && e.pressure > 0) ? e.pressure : null;
+const capture = e => { try { cv.setPointerCapture(e.pointerId); } catch (x) {} };
 
 function eraseAt(pt) {
-  const R = 20 / Math.max(scale * 2.2, .3) * 1.0 + 8; // 邏輯單位
+  const R = 20 / Math.max(scale * 2.2, .3) + 8;
   for (let i = ink.strokes.length - 1; i >= 0; i--) {
     const s = ink.strokes[i];
     if (s.p.some(q => Math.hypot(q[0] - pt[0], q[1] - pt[1]) < R + (s.t === 'h' ? s.w * 2.5 : s.w / 2))) {
@@ -379,12 +488,20 @@ cv.addEventListener('pointerdown', e => {
   const fingers = [...touches.values()].filter(t => t.type === 'touch').length;
   const pan = tool === 'hand' || (e.pointerType === 'touch' && (hasPen || fingers >= 2));
   if (e.pointerType === 'touch' && fingers >= 2 && drawing) { drawing = null; redraw(); }
-  if (pan) { panLast = { x: e.clientX, y: e.clientY, id: e.pointerId }; cv.setPointerCapture(e.pointerId); return; }
+  if (pan) { panLast = { x: e.clientX, y: e.clientY, id: e.pointerId }; capture(e); return; }
   if (e.pointerType === 'mouse' && e.button !== 0) return;
-  cv.setPointerCapture(e.pointerId);
+  capture(e);
   const pt = pos(e);
+  if (tool === 'img') {
+    const m = imgAt(pt); imgSel = m ? m.id : null;
+    if (m) imgDrag = { id: e.pointerId, dx: pt[0] - m.x, dy: pt[1] - m.y, m };
+    redraw(); updInkUI(); return;
+  }
   if (tool === 'eraser') { erasing = []; eraseAt(pt); return; }
+  const pr = prOf(e);
+  if (pr != null) pt.push(Math.round(pr * 100) / 100);
   drawing = { t: tool === 'hl' ? 'h' : 'p', c: color, w: pw, p: [pt], id: e.pointerId };
+  if (pr != null) { drawing.pv = 1; drawing.lp = pr; }
   redraw();
 });
 
@@ -392,15 +509,19 @@ cv.addEventListener('pointermove', e => {
   const t = touches.get(e.pointerId); if (!t) return;
   t.x = e.clientX; t.y = e.clientY;
   if (panLast && panLast.id === e.pointerId) { $('#inkWrap').scrollTop -= e.clientY - panLast.y; panLast.y = e.clientY; panLast.x = e.clientX; return; }
+  if (imgDrag && imgDrag.id === e.pointerId) { const pt = pos(e); imgDrag.m.x = pt[0] - imgDrag.dx; imgDrag.m.y = pt[1] - imgDrag.dy; redraw(); return; }
   if (erasing) { eraseAt(pos(e)); return; }
   if (!drawing || drawing.id !== e.pointerId) return;
   const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
   for (const ev of (evs.length ? evs : [e])) {
     const pt = pos(ev), l = drawing.p[drawing.p.length - 1];
     if (Math.hypot(pt[0] - l[0], pt[1] - l[1]) < .8) continue;
+    const pr = prOf(ev);
+    if (pr != null && drawing.pv) { drawing.lp = drawing.lp * .6 + pr * .4; pt.push(Math.round(drawing.lp * 100) / 100); }
     drawing.p.push(pt);
     if (drawing.t === 'p') {
-      ctx.save(); ctx.lineCap = ctx.lineJoin = 'round'; ctx.strokeStyle = okColor(drawing.c); ctx.lineWidth = drawing.w;
+      ctx.save(); ctx.lineCap = ctx.lineJoin = 'round'; ctx.strokeStyle = okColor(drawing.c);
+      ctx.lineWidth = drawing.pv ? drawing.w * prW(((l[2] || .5) + (pt[2] || .5)) / 2) : drawing.w;
       ctx.beginPath(); ctx.moveTo(l[0], l[1]); ctx.lineTo(pt[0], pt[1]); ctx.stroke(); ctx.restore();
     }
   }
@@ -410,12 +531,13 @@ cv.addEventListener('pointermove', e => {
 function endPtr(e) {
   touches.delete(e.pointerId);
   if (panLast && panLast.id === e.pointerId) panLast = null;
+  if (imgDrag && imgDrag.id === e.pointerId) { imgDrag = null; touch(); return; }
   if (erasing) {
     if (erasing.length) { undoS.push({ a: 'del', items: erasing }); redoS = []; touch(); }
     erasing = null; updInkUI(); return;
   }
   if (drawing && drawing.id === e.pointerId) {
-    const s = drawing; drawing = null; delete s.id;
+    const s = drawing; drawing = null; delete s.id; delete s.lp;
     if (e.type !== 'pointercancel') {
       ink.strokes.push(s); undoS.push({ a: 'add', s }); redoS = [];
       if (s.p.some(q => q[1] > ink.h - 160)) { ink.h += 700; sizeCanvas(); } else redraw();
@@ -670,6 +792,51 @@ function autoSync() {
 }
 $('#syncBtn').onclick = () => sync(!token);
 
+/* ---------- 語音輸入 ---------- */
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+const LANGS = [['zh-TW', '中文'], ['en-US', 'English'], ['ja-JP', '日本語']];
+const ANDROID = /Android/i.test(navigator.userAgent);
+let langI = Math.min(LANGS.length - 1, Math.max(0, +localStorage.getItem('cloudnotes.lang') || 0)), voice = null;
+function showLang() { $('#langBtn').textContent = LANGS[langI][1]; }
+function stopVoice() {
+  if (!voice) return;
+  const v = voice; voice = null; v.btn.classList.remove('rec');
+  try { v.rec && v.rec.abort(); } catch (e) {}
+}
+function startVoice(el, btn) {
+  if (!SR) { toast('這個瀏覽器不支援語音輸入,請用 Android 版 Chrome'); return; }
+  const v = voice = { el, btn, rec: null, pos: el.selectionStart == null ? el.value.length : el.selectionStart, len: 0 };
+  btn.classList.add('rec');
+  const begin = () => {
+    if (voice !== v) return;
+    const r = new SR(); v.rec = r;
+    r.lang = LANGS[langI][0]; r.continuous = !ANDROID; r.interimResults = true;
+    r.onresult = ev => {
+      let t = ''; for (let i = 0; i < ev.results.length; i++) t += ev.results[i][0].transcript;
+      const val = el.value; el.value = val.slice(0, v.pos) + t + val.slice(v.pos + v.len); v.len = t.length;
+      const c = v.pos + v.len; try { el.setSelectionRange(c, c); } catch (e) {}
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    };
+    r.onerror = ev => {
+      if (ev.error === 'not-allowed' || ev.error === 'service-not-allowed') { toast('請允許麥克風權限後再試一次'); stopVoice(); }
+      else if (ev.error === 'network') { toast('語音辨識需要網路連線'); stopVoice(); }
+    };
+    r.onend = () => { if (voice !== v) return; v.pos += v.len; v.len = 0; setTimeout(begin, 150); };
+    try { r.start(); } catch (e) { stopVoice(); }
+  };
+  begin();
+  toast('請開始說話(' + LANGS[langI][1] + ')');
+}
+function toggleVoice(el, btn) { if (voice && voice.btn === btn) stopVoice(); else { stopVoice(); startVoice(el, btn); } }
+$('#langBtn').onclick = () => {
+  langI = (langI + 1) % LANGS.length; localStorage.setItem('cloudnotes.lang', langI); showLang();
+  if (voice) { const { el, btn } = voice; stopVoice(); startVoice(el, btn); }
+};
+showLang();
+$('#micBtn').onclick = () => toggleVoice($('#ebody'), $('#micBtn'));
+$('#nodeMic').onclick = () => toggleVoice($('#nodeInp'), $('#nodeMic'));
+$('#nodeDlg').addEventListener('close', stopVoice);
+
 /* ---------- 設定 / 匯出 ---------- */
 $('#setBtn').onclick = () => { $('#cid').value = cid(); $('#dlg').showModal(); };
 $('#cancel').onclick = () => $('#dlg').close();
@@ -680,7 +847,15 @@ $('#exportBtn').onclick = () => {
 };
 
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
-render();
+(async () => {
+  let v;
+  try { v = await idb.get('notes'); } catch (e) {}
+  if (Array.isArray(v)) notes = v;
+  else { try { notes = JSON.parse(localStorage.getItem(KEY) || '[]'); } catch (e) { notes = []; } }
+  loaded = true;
+  if (!Array.isArray(v)) flush();
+  render();
+})();
 </script>
 </body>
 </html>
