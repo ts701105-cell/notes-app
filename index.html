@@ -1463,7 +1463,13 @@ function importClip(c) {
   const url = typeof c.url === 'string' && /^https?:\/\//i.test(c.url) ? c.url.slice(0, 2000) : '';
   const n = { id: uid(), type: 'text', title: String(c.title || url || '網頁剪輯').slice(0, 200), body: '', tags: ['網頁剪輯'], nb: nb.id, src: url, created: Date.now(), updatedAt: Date.now(), deleted: false };
   for (const t of Array.isArray(c.tags) ? c.tags : []) { const v = String(t).trim().replace(/^[#＃]+/, '').slice(0, 20); if (v && n.tags.length < 10 && !n.tags.some(x => x.toLowerCase() === v.toLowerCase())) n.tags.push(v); }
-  if (c.kind === 'shot') {
+  if (c.kind === 'html') {
+    if (typeof c.html !== 'string' || c.html.length > 25e6) throw new Error('bad html');
+    const clean = sanitizeHtml(c.html, true);
+    let host = url; try { host = new URL(url).hostname; } catch (e) {}
+    n.html = (url ? `<div>🔗 <a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(host)}</a> · 擷取於 ${esc(fmt(Date.now()))}</div>` : '') + (c.note ? `<div>📝 ${esc(String(c.note).slice(0, 2000))}</div>` : '') + '<hr>' + clean;
+    n.body = new DOMParser().parseFromString(clean.replace(/<\/(p|div|h[1-6]|li|tr|blockquote|pre)>/gi, '$&\n'), 'text/html').body.textContent.replace(/\n{3,}/g, '\n\n').trim().slice(0, 100000);
+  } else if (c.kind === 'shot') {
     if (typeof c.img !== 'string' || !c.img.startsWith('data:image/jpeg;base64,') || c.img.length > 8e6) throw new Error('bad image');
     const w = 960, h = Math.min(7000, Math.max(40, Math.round(w * (+c.h || 1) / (+c.w || 1))));
     n.type = 'ink';
