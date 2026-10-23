@@ -1437,7 +1437,7 @@ const EX_CSS = `.x{width:800px;padding:48px 52px 56px;background:#fff;color:#262
 .x ul,.x ol{padding-left:26px;margin:.3em 0}
 .x blockquote{margin:8px 0;padding:2px 14px;border-left:3px solid #00a82d;color:#6e7681}
 .x pre{background:#f3f4f5;padding:10px 12px;border-radius:8px;white-space:pre-wrap;font:14px/1.5 ui-monospace,Menlo,Consolas,monospace}
-.x img{max-width:100%;height:auto}
+.x img{max-width:100%;max-height:900px;height:auto;display:block}
 .x a{color:#00a82d}
 .x hr{border:0;border-top:1px solid #e4e6e8;margin:14px 0}
 .x table{border-collapse:collapse;max-width:100%}.x td,.x th{border:1px solid #e4e6e8;padding:4px 8px}
@@ -1470,10 +1470,19 @@ async function textCanvas(n) {
   probe.innerHTML = `<style>${EX_CSS}</style>`; probe.append(host.cloneNode(true)); document.body.append(probe);
   try {
     await Promise.all([...probe.querySelectorAll('img')].map(i => i.decode ? i.decode().catch(() => {}) : null));
-    const H = Math.ceil(probe.querySelector('.x').getBoundingClientRect().height);
+    const xEl = probe.querySelector('.x'), xr = xEl.getBoundingClientRect(), H = Math.ceil(xr.height), hard = [], soft = [];
+    for (const im of xEl.querySelectorAll('img,hr')) { const r = im.getBoundingClientRect(); hard.push([r.top - xr.top, r.bottom - xr.top]); }
+    const tw = document.createTreeWalker(xEl, NodeFilter.SHOW_TEXT); let tn;
+    while ((tn = tw.nextNode())) {
+      if (!tn.nodeValue.trim()) continue;
+      const rg = document.createRange(); rg.selectNodeContents(tn);
+      for (const r of rg.getClientRects()) if (r.height > 0) soft.push([r.top - xr.top, r.bottom - xr.top]);
+    }
     const xhtml = new XMLSerializer().serializeToString(host);
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="${H}"><foreignObject x="0" y="0" width="800" height="${H}"><style>${EX_CSS}</style>${xhtml}</foreignObject></svg>`;
-    return await rasterSvg(svg, 800, H);
+    const cv = await rasterSvg(svg, 800, H), kk = cv.height / H;
+    cv._br = { hard: hard.map(r => [r[0] * kk, r[1] * kk]), soft: soft.map(r => [r[0] * kk, r[1] * kk]) };
+    return cv;
   } finally { probe.remove(); }
 }
 
@@ -1482,7 +1491,7 @@ async function inkCanvas(n) {
   for (const m of I.imgs || []) if (/^data:image\/(jpeg|png|webp);base64,/.test(m.d)) { try { imgs.push([m, await loadImg(m.d)]); } catch (e) {} }
   let maxY = 0;
   for (const s of I.strokes) for (const p of s.p) if (p[1] > maxY) maxY = p[1];
-  for (const m of I.imgs || []) maxY = Math.max(maxY, m.y + m.h);
+  for (const m of I.imgs || []) maxY = Math.max(maxY, m.y + Math.min(m.h, 1100));
   const HEAD = 110, bodyH = Math.min(I.h, Math.max(700, Math.ceil(maxY + 80))), H = bodyH + HEAD, k = Math.min(1.6, 16000 / H);
   const c = document.createElement('canvas'); c.width = Math.round(INK_W * k); c.height = Math.round(H * k);
   const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height);
@@ -1498,8 +1507,13 @@ async function inkCanvas(n) {
     if (I.bg === 'grid') for (let x = gs; x < INK_W; x += gs) { g.moveTo(x, 0); g.lineTo(x, bodyH); }
     g.stroke();
   }
-  for (const [m, im] of imgs) g.drawImage(im, m.x, m.y, m.w, m.h);
+  const hard = [];
+  for (const [m, im] of imgs) {
+    const f = Math.min(1, 1100 / m.h), w = m.w * f, h = m.h * f;
+    g.drawImage(im, m.x + (m.w - w) / 2, m.y, w, h); hard.push([(HEAD + m.y) * k, (HEAD + m.y + h) * k]);
+  }
   for (const s of I.strokes) drawStroke(s, g);
+  c._br = { hard, soft: [] };
   return c;
 }
 
@@ -1562,9 +1576,18 @@ async function canvasToPdf(src, fit) {
     g.drawImage(src, (W - w) / 2, (pagePx - h) / 2, w, h);
     pages.push({ w: W, h: pagePx, bytes: await toJpg(pc) });
   } else {
-    for (let y = 0; y < src.height && pages.length < 80; y += uh) {
-      const sh = Math.min(uh, src.height - y), pc = document.createElement('canvas'); pc.width = W; pc.height = pagePx;
-      const g = pc.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, W, pagePx); g.drawImage(src, 0, y, W, sh, 0, mY, W, sh);
+    const br = src._br || { hard: [], soft: [] };
+    const pushUp = (e, y, rs) => { let moved = true, n = 0; while (moved && n++ < 200) { moved = false; for (const r of rs) if (r[0] > y && r[0] < e && e < r[1]) { e = r[0]; moved = true; } } return e; };
+    for (let y = 0; y < src.height && pages.length < 80;) {
+      let e = Math.min(src.height, y + uh);
+      if (e < src.height) {
+        let e1 = pushUp(e, y, br.hard.concat(br.soft));
+        if (e1 - y < uh * 0.5) e1 = pushUp(e, y, br.hard);
+        e = e1 - y < uh * 0.2 ? e : e1;
+      }
+      const sh = Math.max(1, Math.round(e - y)), y0 = y; y = y0 + sh;
+      const pc = document.createElement('canvas'); pc.width = W; pc.height = pagePx;
+      const g = pc.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, W, pagePx); g.drawImage(src, 0, y0, W, sh, 0, mY, W, sh);
       pages.push({ w: W, h: pagePx, bytes: await toJpg(pc) });
     }
   }
