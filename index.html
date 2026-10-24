@@ -280,7 +280,7 @@ dialog .row{display:flex;gap:8px;justify-content:flex-end;margin-top:16px;flex-w
         <button class="ib" data-pin aria-label="置頂" title="置頂">📌</button>
         <button class="ib" data-del aria-label="刪除" title="移到垃圾桶">🗑️</button>
       </div>
-      <div id="pgNav"><button class="ib" id="pgPrev" aria-label="上一頁">‹</button><button class="tb" id="pgNum">1 / 1</button><button class="ib" id="pgNext" aria-label="下一頁">›</button><span class="sep"></span><button class="ib" id="zOut" aria-label="縮小">－</button><span id="zTxt">100%</span><button class="ib" id="zIn" aria-label="放大">＋</button></div>
+      <div id="pgNav"><button class="ib" id="pgPrev" aria-label="上一頁">‹</button><button class="tb" id="pgNum">1 / 1</button><button class="ib" id="pgNext" aria-label="下一頁">›</button><button class="tb" id="pgRelink" hidden>📎 選取 PDF 檔</button><span class="sep"></span><button class="ib" id="zOut" aria-label="縮小">－</button><span id="zTxt">100%</span><button class="ib" id="zIn" aria-label="放大">＋</button></div>
       <div id="inkWrap"><canvas id="cv"></canvas></div>
       <div class="tools" id="inkTools">
         <button class="tb" id="imgSm" hidden>圖－</button>
@@ -370,7 +370,7 @@ dialog .row{display:flex;gap:8px;justify-content:flex-end;margin-top:16px;flex-w
   </div>
 </dialog>
 
-<input type="file" id="pdfFile" accept="application/pdf,.pdf" hidden>
+<input type="file" id="pdfFile" accept="application/pdf,.pdf" hidden><input type="file" id="pdfRelink" accept="application/pdf,.pdf" hidden>
 <div id="fsPill"><button class="ib" id="fsUndo" aria-label="復原">↶</button><button class="ib" id="fsRedo" aria-label="重做">↷</button><button class="ib" id="fsExit" aria-label="退出全螢幕" title="退出全螢幕">✕</button></div>
 <div class="meta" id="metaBar"><button class="chip" id="nbPick">📓 未分類</button><span id="metaTags" style="display:contents"></span><button class="chip" id="tagAdd">＋標籤</button><button class="chip" id="lockBtn">🔓 鎖定</button><button class="chip" id="cpBtn">⧉ 複製到…</button><button class="chip" id="fsBtn">⛶ 全螢幕</button><a class="chip" id="srcLink" target="_blank" rel="noopener" hidden>🔗 原網頁</a></div>
 
@@ -514,6 +514,7 @@ function textThumb(n) {
 function wipe(n) {
   n.title = ''; n.body = ''; n.html = ''; n.tags = []; n.src = '';
   if (n.ink) n.ink = { h: 1400, bg: 'blank', strokes: [], imgs: [] };
+  if (n.pdf && n.pdf.key) pdfDB.del(n.pdf.key);
   n.pdf = null;
   if (n.mind) { const r = uid(); n.mind = { root: r, nodes: { [r]: { id: r, t: '', p: null, ch: [], col: false } }, v: null }; }
 }
@@ -840,6 +841,7 @@ function startInk() {
   $('#inkWrap').scrollTop = 0; $('#inkWrap').scrollLeft = 0; zoom = 1;
   $('#inkEd').classList.toggle('pdfm', !!cur.pdf); pgUI();
   sizeCanvas(); updInkUI();
+  if (cur.pdf && cur.pdf.v) pdfShow();
 }
 
 function sizeCanvas() {
@@ -911,7 +913,7 @@ function redraw() {
     if (ink.bg === 'grid') for (let x = g; x < INK_W; x += g) { ctx.moveTo(x, 0); ctx.lineTo(x, ink.h); }
     ctx.stroke();
   }
-  for (const m of ink.imgs || []) { const im = getImg(m); if (im.complete && im.naturalWidth) ctx.drawImage(im, m.x, m.y, m.w, m.h); }
+  for (const m of ink.imgs || []) { const im = getImg(m); if (im.tagName === 'CANVAS' || (im.complete && im.naturalWidth)) ctx.drawImage(im, m.x, m.y, m.w, m.h); }
   for (const s of ink.strokes) drawStroke(s);
   if (drawing) drawStroke(drawing);
   if (tool === 'img' && imgSel) {
@@ -956,88 +958,146 @@ function pdfLib() {
   if (!pdfLibP) pdfLibP = loadScript('lib/pdf.min.js').then(() => { pdfjsLib.GlobalWorkerOptions.workerSrc = 'lib/pdf.worker.min.js'; return pdfjsLib; }).catch(e => { pdfLibP = null; throw e; });
   return pdfLibP;
 }
-const PDF_MAX_PAGES = 40, PDF_MAX_CHARS = 14e6;
+const PDF_MAX_PAGES = 1000, PDF_MAX_BYTES = 300e6, PDF_ALL_LIMIT = 60;
+/* 原始 PDF 檔存在這台裝置的獨立資料庫(不放進筆記、不隨 Google Drive 同步);筆記只存標注 */
+const pdfDB = {
+  db: null,
+  open() { return this.db || (this.db = new Promise((res, rej) => { const r = indexedDB.open('cloudnotes-pdf', 1); r.onupgradeneeded = () => r.result.createObjectStore('f'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); })); },
+  async tx(mode, fn) { const d = await this.open(); return new Promise((res, rej) => { const t = d.transaction('f', mode), q = fn(t.objectStore('f')); t.oncomplete = () => res(q && q.result); t.onerror = () => rej(t.error); t.onabort = () => rej(t.error); }); },
+  put(k, v) { return this.tx('readwrite', st => st.put(v, k)); },
+  get(k) { return this.tx('readonly', st => st.get(k)); },
+  del(k) { return this.tx('readwrite', st => st.delete(k)).catch(() => {}); }
+};
+const pdfDocs = new Map();
+async function pdfDoc(key) {
+  if (pdfDocs.has(key)) return pdfDocs.get(key);
+  const blob = await pdfDB.get(key); if (!blob) return null;
+  const lib = await pdfLib(), doc = await lib.getDocument({ data: await blob.arrayBuffer(), cMapUrl: 'lib/cmaps/', cMapPacked: true }).promise;
+  for (const [k, d] of pdfDocs) { try { d.destroy(); } catch (e) {} pdfDocs.delete(k); }
+  pdfDocs.set(key, doc); return doc;
+}
+const pageInk = p => ({ h: p.h, bg: 'blank', strokes: p.strokes || [], imgs: [{ id: 'pg' + uid(), x: 0, y: 0, w: p.w || INK_W, h: p.h, d: p.d }] });
+const pgCount = P => P.v ? P.count : P.pages.length;
+let pdfMissing = false, showTok = 0;
+async function renderPdfPage(doc, i, maxW) {
+  const pg = await doc.getPage(i + 1), v0 = pg.getViewport({ scale: 1 });
+  const k = Math.min(2.2, maxW / v0.width), vp = pg.getViewport({ scale: k });
+  const c = document.createElement('canvas'); c.width = Math.round(vp.width); c.height = Math.round(vp.height);
+  const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height);
+  await pg.render({ canvasContext: g, viewport: vp }).promise; pg.cleanup();
+  return c;
+}
+async function pdfShow() {
+  const n = cur, P = n && n.pdf; if (!P || !P.v) return;
+  const m = n.ink.imgs[0], tok = ++showTok;
+  let doc = null;
+  try { doc = await pdfDoc(P.key); } catch (e) { toast('PDF 讀取失敗:' + (e.message || '')); }
+  if (tok !== showTok || cur !== n) return;
+  pdfMissing = !doc; pgUI();
+  if (!doc) { toast('這台裝置沒有這份 PDF 原檔,請按上方「選取 PDF 檔」'); return; }
+  try {
+    const c = await renderPdfPage(doc, P.i, 1400);
+    if (tok !== showTok || cur !== n) return;
+    imgCache.set(m.id, c);
+    const h = Math.round(INK_W * c.height / c.width);
+    if (h !== m.h) { m.h = h; n.ink.h = h; (P.hs || (P.hs = {}))[P.i] = h; persist(); sizeCanvas(); } else redraw();
+  } catch (e) { console.error(e); toast('這一頁轉換失敗'); }
+}
 async function importPdf(file) {
   if (!file || !(/pdf$/i.test(file.type) || /\.pdf$/i.test(file.name))) { toast('這不是 PDF 檔'); return; }
+  if (file.size > PDF_MAX_BYTES) { toast('檔案太大(上限 ' + Math.round(PDF_MAX_BYTES / 1e6) + ' MB)'); return; }
   toast('讀取 PDF 中…');
   try {
-    const lib = await pdfLib(), buf = await file.arrayBuffer();
-    const doc = await lib.getDocument({ data: buf, cMapUrl: 'lib/cmaps/', cMapPacked: true }).promise;
-    const total = doc.numPages, count = Math.min(total, PDF_MAX_PAGES), pages = []; let chars = 0;
-    for (let i = 1; i <= count; i++) {
-      toast('轉換第 ' + i + ' / ' + count + ' 頁…');
-      const pg = await doc.getPage(i), v0 = pg.getViewport({ scale: 1 });
-      const k = Math.min(2.2, 1400 / v0.width), vp = pg.getViewport({ scale: k });
-      const c = document.createElement('canvas'); c.width = Math.round(vp.width); c.height = Math.round(vp.height);
-      const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height);
-      await pg.render({ canvasContext: g, viewport: vp }).promise;
-      const d = c.toDataURL('image/jpeg', .74);
-      if (chars + d.length > PDF_MAX_CHARS && pages.length) { toast('檔案太大,只匯入前 ' + pages.length + ' 頁'); break; }
-      chars += d.length;
-      pages.push({ d, w: INK_W, h: Math.round(INK_W * c.height / c.width), strokes: [] });
-      pg.cleanup();
-    }
-    doc.destroy();
-    if (!pages.length) throw new Error('PDF 沒有內容');
+    const lib = await pdfLib(), key = uid();
+    await pdfDB.put(key, file);
+    const doc = await lib.getDocument({ data: await file.arrayBuffer(), cMapUrl: 'lib/cmaps/', cMapPacked: true }).promise;
+    if (doc.numPages > PDF_MAX_PAGES) { pdfDB.del(key); doc.destroy(); toast('頁數太多(最多 ' + PDF_MAX_PAGES + ' 頁,這份有 ' + doc.numPages + ' 頁)'); return; }
+    for (const [k, d] of pdfDocs) { try { d.destroy(); } catch (e) {} pdfDocs.delete(k); }
+    pdfDocs.set(key, doc);
     const n = { id: uid(), type: 'ink', title: file.name.replace(/\.pdf$/i, '').slice(0, 100), body: '', tags: [], nb: (!SPECIAL.includes(view.nb) && nbs.some(x => x.id === view.nb && !x.deleted)) ? view.nb : null, created: Date.now(), updatedAt: Date.now(), deleted: false };
-    n.pdf = { i: 0, pages: pages.map(p => ({ w: p.w, h: p.h, d: null, strokes: null })) };
-    n.ink = pageInk(pages[0]);
+    n.pdf = { v: 2, key, name: file.name, count: doc.numPages, size: file.size, i: 0, s: {}, hs: {} };
+    n.ink = pageInk({ h: 1414 });
     notes.push(n);
     if (view.nb === 'trash' || view.nb === 'pin') { view.nb = 'all'; saveView(); }
     persist(); openNote(n);
-    toast('已匯入 ' + pages.length + ' 頁' + (total > pages.length ? '(原檔共 ' + total + ' 頁,只匯入前 ' + pages.length + ' 頁)' : '') + ',可直接標注');
-    // 其餘頁面資料補進去(第 0 頁在 n.ink)
-    pages.forEach((p, i) => { if (i) { n.pdf.pages[i].d = p.d; n.pdf.pages[i].strokes = []; } });
-    persist();
+    toast('已匯入 ' + doc.numPages + ' 頁,可直接標注');
   } catch (e) { console.error(e); toast('PDF 匯入失敗:' + (e.message || '未知錯誤')); }
 }
-const pageInk = p => ({ h: p.h, bg: 'blank', strokes: p.strokes || [], imgs: [{ id: 'pg' + uid(), x: 0, y: 0, w: p.w, h: p.h, d: p.d }] });
 function pdfSwitch(j) {
   const n = cur; if (!n || !n.pdf) return;
-  const P = n.pdf; j = Math.max(0, Math.min(P.pages.length - 1, j)); if (j === P.i) return;
-  const a = P.pages[P.i]; a.d = n.ink.imgs[0] && n.ink.imgs[0].d; a.strokes = n.ink.strokes;
-  const b = P.pages[j]; n.ink = pageInk(b); b.d = null; b.strokes = null; P.i = j;
+  const P = n.pdf, N = pgCount(P); j = Math.max(0, Math.min(N - 1, j)); if (j === P.i) return;
+  if (P.v) {
+    if (n.ink.strokes.length) P.s[P.i] = n.ink.strokes; else delete P.s[P.i];
+    const h = (P.hs && P.hs[j]) || n.ink.h;
+    n.ink = pageInk({ h, strokes: P.s[j] || [] }); delete P.s[j]; P.i = j;
+  } else {
+    const a = P.pages[P.i]; a.d = n.ink.imgs[0] && n.ink.imgs[0].d; a.strokes = n.ink.strokes;
+    const b = P.pages[j]; n.ink = pageInk(b); b.d = null; b.strokes = null; P.i = j;
+  }
   imgCache.clear(); n.updatedAt = Date.now(); persist();
   startInk();
 }
 function pgUI() {
   const P = cur && cur.pdf; if (!P) return;
-  $('#pgNum').textContent = (P.i + 1) + ' / ' + P.pages.length;
-  $('#pgPrev').disabled = P.i === 0; $('#pgNext').disabled = P.i === P.pages.length - 1;
+  const N = pgCount(P);
+  $('#pgNum').textContent = (P.i + 1) + ' / ' + N;
+  $('#pgPrev').disabled = P.i === 0; $('#pgNext').disabled = P.i === N - 1;
+  $('#pgRelink').hidden = !(P.v && pdfMissing);
 }
 $('#pgPrev').onclick = () => cur && cur.pdf && pdfSwitch(cur.pdf.i - 1);
 $('#pgNext').onclick = () => cur && cur.pdf && pdfSwitch(cur.pdf.i + 1);
 $('#pgNum').onclick = async () => {
   if (!cur || !cur.pdf) return;
-  const v = await askText('跳到第幾頁?(1–' + cur.pdf.pages.length + ')', String(cur.pdf.i + 1));
-  const j = parseInt(v, 10); if (j >= 1 && j <= cur.pdf.pages.length) pdfSwitch(j - 1);
+  const N = pgCount(cur.pdf);
+  const v = await askText('跳到第幾頁?(1–' + N + ')', String(cur.pdf.i + 1));
+  const j = parseInt(v, 10); if (j >= 1 && j <= N) pdfSwitch(j - 1);
 };
 const setZoom = z => { zoom = Math.max(1, Math.min(4, z)); sizeCanvas(); };
 $('#zIn').onclick = () => setZoom(zoom + .5);
 $('#zOut').onclick = () => setZoom(zoom - .5);
 $('#pdfFile').onchange = async e => { const f = e.target.files[0]; e.target.value = ''; if (f) await importPdf(f); };
+$('#pgRelink').onclick = () => $('#pdfRelink').click();
+$('#pdfRelink').onchange = async e => {
+  const f = e.target.files[0]; e.target.value = ''; const n = cur;
+  if (!f || !n || !n.pdf || !n.pdf.v) return;
+  try {
+    const lib = await pdfLib(), doc = await lib.getDocument({ data: await f.arrayBuffer(), cMapUrl: 'lib/cmaps/', cMapPacked: true }).promise;
+    if (doc.numPages !== n.pdf.count) { doc.destroy(); toast('頁數不符(這份有 ' + doc.numPages + ' 頁,筆記是 ' + n.pdf.count + ' 頁),請選同一份檔案'); return; }
+    doc.destroy(); await pdfDB.put(n.pdf.key, f); pdfDocs.delete(n.pdf.key); pdfMissing = false; pdfShow(); toast('已重新連結 PDF');
+  } catch (err) { toast('無法讀取這個 PDF:' + (err.message || '')); }
+};
 async function pdfNoteBlob(n) {
-  const P = n.pdf, outs = []; let PW = 595.28, PH = 841.89;
-  for (let j = 0; j < P.pages.length; j++) {
-    const pg = j === P.i ? { d: n.ink.imgs[0].d, strokes: n.ink.strokes, w: P.pages[j].w, h: P.pages[j].h } : P.pages[j];
-    if (!pg.d) continue;
-    const im = await loadImg(pg.d), k = im.naturalWidth / INK_W;
-    const c = document.createElement('canvas'); c.width = im.naturalWidth; c.height = Math.round(pg.h * k);
-    const g = c.getContext('2d'); g.drawImage(im, 0, 0, c.width, c.height);
-    g.setTransform(k, 0, 0, k, 0, 0); for (const s of pg.strokes || []) drawStroke(s, g);
-    outs.push(c);
-  }
-  if (!outs.length) throw new Error('沒有可匯出的頁面');
-  if (outs[0].width > outs[0].height * 1.1) { PW = 841.89; PH = 595.28; }
-  const W = 1400, H = Math.round(W * PH / PW), pages = [];
-  for (const c of outs) {
+  const P = n.pdf; let PW = 595.28, PH = 841.89, W = 1400, H = 0, pages = [], doc = null, idx = [];
+  const N = pgCount(P);
+  if (P.v) {
+    doc = await pdfDoc(P.key); if (!doc) throw new Error('這台裝置沒有原始 PDF 檔,請先在筆記上方重新選取');
+    const strokesOf = j => j === P.i ? n.ink.strokes : (P.s[j] || []);
+    for (let j = 0; j < N; j++) if (N <= PDF_ALL_LIMIT || strokesOf(j).length) idx.push(j);
+    if (!idx.length) throw new Error('還沒有任何標注可匯出');
+  } else for (let j = 0; j < N; j++) idx.push(j);
+  const bytesOf = async c => {
+    if (!H) { if (c.width > c.height * 1.1) { PW = 841.89; PH = 595.28; } H = Math.round(W * PH / PW); }
     const pc = document.createElement('canvas'); pc.width = W; pc.height = H;
     const g = pc.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, W, H);
     const k = Math.min(W / c.width, H / c.height), w = c.width * k, h = c.height * k;
     g.drawImage(c, (W - w) / 2, (H - h) / 2, w, h);
-    const bytes = await new Promise(r => pc.toBlob(r, 'image/jpeg', .9)).then(b => b.arrayBuffer()).then(a => new Uint8Array(a));
-    pages.push({ w: W, h: H, bytes });
+    return new Promise(r => pc.toBlob(r, 'image/jpeg', .9)).then(b => b.arrayBuffer()).then(a => new Uint8Array(a));
+  };
+  for (let t = 0; t < idx.length; t++) {
+    const j = idx[t]; if (idx.length > 3) toast('匯出第 ' + (t + 1) + ' / ' + idx.length + ' 頁…');
+    let c, strokes;
+    if (P.v) { c = await renderPdfPage(doc, j, 1400); strokes = j === P.i ? n.ink.strokes : (P.s[j] || []); }
+    else {
+      const pg = j === P.i ? { d: n.ink.imgs[0].d, strokes: n.ink.strokes, h: P.pages[j].h } : P.pages[j]; if (!pg.d) continue;
+      const im = await loadImg(pg.d); c = document.createElement('canvas'); c.width = im.naturalWidth; c.height = Math.round(pg.h * im.naturalWidth / INK_W);
+      c.getContext('2d').drawImage(im, 0, 0, c.width, c.height); strokes = pg.strokes || [];
+    }
+    const k = c.width / INK_W, g = c.getContext('2d'); g.setTransform(k, 0, 0, k, 0, 0); for (const s of strokes) drawStroke(s, g);
+    const bytes = await bytesOf(c); pages.push({ w: W, h: H, bytes });
+    c.width = c.height = 1;
   }
+  if (!pages.length) throw new Error('沒有可匯出的頁面');
+  if (P.v && N > PDF_ALL_LIMIT) toast('頁數很多,只匯出有標注的 ' + pages.length + ' 頁');
   return pdfFrom(pages, PW, PH);
 }
 
@@ -1452,6 +1512,7 @@ $('#cpList').addEventListener('click', async e => {
   const c = JSON.parse(JSON.stringify(src));
   c.id = uid(); c.nb = nbId; c.created = now; c.updatedAt = now; c.deleted = false;
   delete c.pin; delete c.lock; delete c.gone;
+  if (c.pdf && c.pdf.key) { const ok = c.pdf.key, nk = uid(); c.pdf.key = nk; pdfDB.get(ok).then(bl => bl && pdfDB.put(nk, bl)).catch(() => {}); }
   if (same) c.title = (c.title || '無標題') + '(副本)';
   notes.push(c); persist(); render(); autoSync();
   const nm = nbId ? (nbs.find(x => x.id === nbId) || {}).name : '未分類';
