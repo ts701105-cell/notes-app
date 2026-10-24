@@ -357,14 +357,10 @@ dialog .row{display:flex;gap:8px;justify-content:flex-end;margin-top:16px;flex-w
 </dialog>
 
 <dialog id="dlg">
-  <h2>雲端同步設定</h2>
+  <h2>Google Drive 同步設定</h2>
   <label for="cid">OAuth 用戶端 ID</label>
   <input id="cid" placeholder="xxxxxxxx.apps.googleusercontent.com" autocomplete="off">
-  <div class="hint"><b>Google Drive</b>:到 Google Cloud Console 建立「網頁應用程式」類型的 OAuth 用戶端 ID,並把本 App 網址加入「已授權的 JavaScript 來源」。筆記會存成你雲端硬碟中的 notes-sync.json,App 只能存取它自己建立的檔案。</div>
-  <label for="odcid">OneDrive 應用程式(用戶端)識別碼(選填)</label>
-  <input id="odcid" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" autocomplete="off">
-  <div class="hint"><b>OneDrive</b>:到 Microsoft Entra「應用程式註冊」新增應用程式,帳戶類型選「任何組織目錄中的帳戶與個人 Microsoft 帳戶」,平台選「單頁應用程式」,重新導向 URI 填 <span id="odRedir"></span>,再把識別碼貼上。兩邊都填就會同時同步。<span id="odState"></span></div>
-  <button class="btn" id="odOut" type="button">登出 OneDrive</button>
+  <div class="hint">到 Google Cloud Console 建立「網頁應用程式」類型的 OAuth 用戶端 ID,並把本 App 網址加入「已授權的 JavaScript 來源」。筆記會存成你雲端硬碟中的 notes-sync.json,App 只能存取它自己建立的檔案。</div>
   <div class="hint">Chrome 網頁剪輯:<a href="cloudnotes-clipper.zip" download>下載擴充套件</a>,解壓縮後在 chrome://extensions 開啟「開發人員模式」→「載入未封裝項目」選擇該資料夾。</div>
   <div class="row">
     <button class="btn" id="logoutBtn">登出</button>
@@ -527,7 +523,7 @@ function textThumb(n) {
 function wipe(n) {
   n.title = ''; n.body = ''; n.html = ''; n.tags = []; n.src = '';
   if (n.ink) n.ink = { h: 1400, bg: 'blank', strokes: [], imgs: [] };
-  if (n.pdf && n.pdf.key) { pdfDB.del(n.pdf.key); GD.del(n.pdf); OD.del(n.pdf); }
+  if (n.pdf && n.pdf.key) { pdfDB.del(n.pdf.key); GD.del(n.pdf); }
   n.pdf = null;
   if (n.mind) { const r = uid(); n.mind = { root: r, nodes: { [r]: { id: r, t: '', p: null, ch: [], col: false } }, v: null }; }
 }
@@ -996,7 +992,7 @@ async function pdfUpload(P, blob) {
 async function pdfDoc(key, P) {
   if (pdfDocs.has(key)) return pdfDocs.get(key);
   let blob = await pdfDB.get(key);
-  if (!blob && P && (P.fid || P.od)) { toast('從雲端下載 PDF…'); for (const pv of PROVS) { if (blob) break; if (pv.has(P)) blob = await pv.getPdf(P).catch(() => null); } }
+  if (!blob && P && P.fid) { toast('從 Google Drive 下載 PDF…'); for (const pv of PROVS) { if (blob) break; if (pv.has(P)) blob = await pv.getPdf(P).catch(() => null); } }
   if (!blob) return null;
   const lib = await pdfLib(), doc = await lib.getDocument({ data: await blob.arrayBuffer(), cMapUrl: 'lib/cmaps/', cMapPacked: true }).promise;
   for (const [k, d] of pdfDocs) { try { d.destroy(); } catch (e) {} pdfDocs.delete(k); }
@@ -1020,7 +1016,7 @@ async function pdfShow() {
   try { doc = await pdfDoc(P.key, P); } catch (e) { toast('PDF 讀取失敗:' + (e.message || '')); }
   if (tok !== showTok || cur !== n) return;
   pdfMissing = !doc; pgUI();
-  if (!doc) { toast((P.fid || P.od) ? '這台裝置還沒有這份 PDF,請按上方按鈕從雲端下載' : '這台裝置沒有這份 PDF 原檔,請按上方「選取 PDF 檔」'); return; }
+  if (!doc) { toast(P.fid ? '這台裝置還沒有這份 PDF,請按上方按鈕從 Google Drive 下載' : '這台裝置沒有這份 PDF 原檔,請按上方「選取 PDF 檔」'); return; }
   try {
     const c = await renderPdfPage(doc, P.i, 1400);
     if (tok !== showTok || cur !== n) return;
@@ -1546,7 +1542,7 @@ $('#cpList').addEventListener('click', async e => {
   const c = JSON.parse(JSON.stringify(src));
   c.id = uid(); c.nb = nbId; c.created = now; c.updatedAt = now; c.deleted = false;
   delete c.pin; delete c.lock; delete c.gone;
-  if (c.pdf && c.pdf.key) { const ok = c.pdf.key, nk = uid(); c.pdf.key = nk; delete c.pdf.fid; delete c.pdf.od; pdfDB.get(ok).then(bl => bl && pdfDB.put(nk, bl)).catch(() => {}); }
+  if (c.pdf && c.pdf.key) { const ok = c.pdf.key, nk = uid(); c.pdf.key = nk; delete c.pdf.fid; pdfDB.get(ok).then(bl => bl && pdfDB.put(nk, bl)).catch(() => {}); }
   if (same) c.title = (c.title || '無標題') + '(副本)';
   notes.push(c); persist(); render(); autoSync();
   const nm = nbId ? (nbs.find(x => x.id === nbId) || {}).name : '未分類';
@@ -1652,72 +1648,7 @@ function merge(local, remote) {
 }
 
 let syncing = false;
-/* ---------- OneDrive(Microsoft Graph,授權碼 + PKCE,不需要額外函式庫)---------- */
-const OD_CID = 'cloudnotes.odcid', OD_RT = 'cloudnotes.odrt', OD_LINK = 'cloudnotes.odlinked', OD_VER = 'cloudnotes.odver';
-const OD_AUTH = 'https://login.microsoftonline.com/common/oauth2/v2.0';
-const OD_SCOPE = 'Files.ReadWrite.AppFolder offline_access';
-const ODRT = 'https://graph.microsoft.com/v1.0/me/drive/special/approot';
-const odCid = () => (localStorage.getItem(OD_CID) || '').trim();
-const odRedirect = () => location.origin + location.pathname;
-let odTok = null, odExp = 0;
-const b64u = u8 => btoa(String.fromCharCode(...u8)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-const odReady = () => !!odTok && Date.now() < odExp - 60000;
-async function odTokenReq(params) {
-  const r = await fetch(OD_AUTH + '/token', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ client_id: odCid(), scope: OD_SCOPE, ...params }) });
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok || !j.access_token) throw new Error('OneDrive 授權失敗' + (j.error_description ? ':' + j.error_description.split('\r')[0].slice(0, 80) : ''));
-  odTok = j.access_token; odExp = Date.now() + (j.expires_in || 3600) * 1000;
-  if (j.refresh_token) localStorage.setItem(OD_RT, j.refresh_token);
-  localStorage.setItem(OD_LINK, '1'); return odTok;
-}
-async function odStartLogin() {
-  const ver = b64u(crypto.getRandomValues(new Uint8Array(48))), st = 'od' + b64u(crypto.getRandomValues(new Uint8Array(12)));
-  const ch = b64u(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(ver))));
-  try { sessionStorage.setItem('cloudnotes.odpkce', JSON.stringify({ ver, st })); localStorage.setItem('cloudnotes.odpkce', JSON.stringify({ ver, st })); } catch (e) {}
-  saveNow();
-  location.href = OD_AUTH + '/authorize?' + new URLSearchParams({ client_id: odCid(), response_type: 'code', redirect_uri: odRedirect(), response_mode: 'query', scope: OD_SCOPE, state: st, code_challenge: ch, code_challenge_method: 'S256', prompt: 'select_account' });
-  return new Promise(() => {});
-}
-/* 從 Microsoft 登入頁導回後,用網址中的 code 換 token */
-async function odHandleRedirect() {
-  const q = new URLSearchParams(location.search);
-  if (!q.get('state') || !/^od/.test(q.get('state')) || !(q.get('code') || q.get('error'))) return false;
-  let pk = null; try { pk = JSON.parse(sessionStorage.getItem('cloudnotes.odpkce') || localStorage.getItem('cloudnotes.odpkce') || 'null'); } catch (e) {}
-  history.replaceState(null, '', location.pathname);
-  try { localStorage.removeItem('cloudnotes.odpkce'); sessionStorage.removeItem('cloudnotes.odpkce'); } catch (e) {}
-  if (q.get('error')) { setStatus('OneDrive 登入失敗:' + (q.get('error_description') || q.get('error')).slice(0, 80)); return false; }
-  if (!pk || pk.st !== q.get('state')) { setStatus('OneDrive 登入驗證不符,請再試一次'); return false; }
-  try { await odTokenReq({ grant_type: 'authorization_code', code: q.get('code'), redirect_uri: odRedirect(), code_verifier: pk.ver }); return true; }
-  catch (e) { setStatus(e.message); return false; }
-}
-async function odAuthTok(interactive) {
-  if (odReady()) return odTok;
-  if (!odCid()) throw new Error('請先到 ⚙️ 設定填入 OneDrive 應用程式識別碼');
-  const rt = localStorage.getItem(OD_RT);
-  if (rt) { try { return await odTokenReq({ grant_type: 'refresh_token', refresh_token: rt }); } catch (e) { localStorage.removeItem(OD_RT); } }
-  if (!interactive) throw new Error('OneDrive 需要重新登入,請點 ☁️ 同步');
-  return odStartLogin();
-}
-async function odApi(path, opts = {}, raw) {
-  const r = await fetch(raw ? path : ODRT + ':/' + path, { ...opts, headers: { Authorization: 'Bearer ' + odTok, ...(opts.headers || {}) } });
-  if (!r.ok && r.status !== 404) throw new Error('OneDrive 錯誤 ' + r.status);
-  return r;
-}
-async function odPut(name, blob) {
-  const enc = encodeURIComponent(name);
-  if (blob.size <= 4e6) { await odApi(enc + ':/content', { method: 'PUT', headers: { 'Content-Type': blob.type || 'application/octet-stream' }, body: blob }); return; }
-  const ses = await (await odApi(enc + ':/createUploadSession', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ item: { '@microsoft.graph.conflictBehavior': 'replace' } }) })).json();
-  const CH = 320 * 1024 * 12; let pos = 0;
-  while (pos < blob.size) {
-    const end = Math.min(blob.size, pos + CH);
-    const r = await fetch(ses.uploadUrl, { method: 'PUT', headers: { 'Content-Range': `bytes ${pos}-${end - 1}/${blob.size}` }, body: blob.slice(pos, end) });
-    if (!r.ok && r.status !== 202) throw new Error('OneDrive 上傳失敗 ' + r.status);
-    pos = end;
-  }
-}
-const odPdfName = P => 'cloudnotes-pdf-' + P.key + '.pdf';
-
-/* ---------- 雲端同步(Google Drive + OneDrive 可同時使用)---------- */
+/* ---------- 雲端同步(Google Drive)---------- */
 let gdFileId = null;
 const GD = {
   name: 'Google Drive', flag: 'fid',
@@ -1742,27 +1673,7 @@ const GD = {
   async getPdf(P) { return pdfFromDrive(P); },
   del(P) { if (P.fid && this.ready()) fetch('https://www.googleapis.com/drive/v3/files/' + P.fid, { method: 'DELETE', headers: { Authorization: 'Bearer ' + token } }).catch(() => {}); }
 };
-const OD = {
-  name: 'OneDrive', flag: 'od',
-  configured: () => !!odCid() && (!!localStorage.getItem(OD_LINK) || !!localStorage.getItem(OD_RT)),
-  ready: () => odReady(),
-  auth: i => odAuthTok(i),
-  async read() {
-    const r = await odApi(encodeURIComponent(FILE) + ':/content');
-    if (r.status === 404) return {};
-    try { return await r.json(); } catch (e) { return {}; }
-  },
-  async write(body) { await odPut(FILE, new Blob([body], { type: 'application/json' })); },
-  has: P => !!P.od,
-  async putPdf(P, blob) { await odPut(odPdfName(P), blob.type ? blob : new Blob([blob], { type: 'application/pdf' })); P.od = 1; },
-  async getPdf(P) {
-    if (!P.od || !odReady()) return null;
-    const r = await odApi(encodeURIComponent(odPdfName(P)) + ':/content'); if (r.status === 404) return null;
-    const bl = await r.blob(); await pdfDB.put(P.key, bl); return bl;
-  },
-  del(P) { if (P.od && odReady()) fetch(ODRT + ':/' + encodeURIComponent(odPdfName(P)), { method: 'DELETE', headers: { Authorization: 'Bearer ' + odTok } }).catch(() => {}); }
-};
-const PROVS = [GD, OD];
+const PROVS = [GD];
 async function syncWith(pv, interactive) {
   await pv.auth(interactive);
   const j = await pv.read(), remote = j.notes || [], remoteNbs = j.notebooks || [];
@@ -1784,17 +1695,15 @@ async function syncWith(pv, interactive) {
   if (cur && cur.pdf && cur.pdf.v && pdfMissing) pdfShow();
   await pv.write(JSON.stringify({ version: 3, notes, notebooks: nbs }));
 }
-async function sync(interactive, only) {
+async function sync(interactive) {
   if (syncing) return;
   syncing = true; setStatus('同步中…');
   const ok = [], bad = [];
   try {
     for (const pv of PROVS) {
-      // 手動點同步:Google 一律嘗試(沿用舊行為);OneDrive 只在已填識別碼時嘗試
-      if (only && pv !== only) continue;
-      const want = pv === GD ? ((interactive && !!cid()) || pv.configured()) : (!!odCid() && (interactive || pv.configured()));
+      const want = (interactive && !!cid()) || pv.configured();
       if (!want) continue;
-      try { await syncWith(pv, pv === GD ? !token : interactive && !pv.ready()); ok.push(pv.name); }
+      try { await syncWith(pv, !token); ok.push(pv.name); }
       catch (e) { bad.push(pv.name + ':' + (e.message || '失敗')); }
     }
     const t = new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' });
@@ -2064,10 +1973,9 @@ $('#exCancel').onclick = () => $('#exDlg').close();
 $$('#exDlg [data-fmt]').forEach(b => b.onclick = () => { $('#exDlg').close(); exportNote(b.dataset.fmt); });
 
 /* ---------- 設定 / 匯出 ---------- */
-$('#setBtn').onclick = () => { $('#cid').value = cid(); $('#odcid').value = odCid(); $('#odRedir').textContent = odRedirect(); $('#odState').textContent = OD.configured() ? '(目前:已連接)' : ''; $('#dlg').showModal(); };
-$('#odOut').onclick = () => { [OD_RT, OD_LINK].forEach(k => localStorage.removeItem(k)); odTok = null; odExp = 0; $('#odState').textContent = '(已登出)'; toast('已登出 OneDrive'); };
+$('#setBtn').onclick = () => { $('#cid').value = cid(); $('#dlg').showModal(); };
 $('#cancel').onclick = () => $('#dlg').close();
-$('#save').onclick = () => { localStorage.setItem(CID_KEY, $('#cid').value.trim()); const oc = $('#odcid').value.trim(); if (oc !== odCid()) { [OD_RT, OD_LINK].forEach(k => localStorage.removeItem(k)); odTok = null; } localStorage.setItem(OD_CID, oc); token = null; $('#dlg').close(); setStatus('設定已儲存,點 ☁️ 開始同步'); };
+$('#save').onclick = () => { localStorage.setItem(CID_KEY, $('#cid').value.trim()); token = null; $('#dlg').close(); setStatus('設定已儲存,點 ☁️ 開始同步'); };
 $('#exportBtn').onclick = () => {
   const blob = new Blob([JSON.stringify({ notes: notes.filter(n => !n.deleted) }, null, 2)], { type: 'application/json' });
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'notes-backup.json'; a.click();
@@ -2147,16 +2055,15 @@ async function bootApp() {
   loaded = true;
   if (!Array.isArray(v)) flush();
   render();
-  setStatus(localStorage.getItem('cloudnotes.linked') || OD.configured() ? '已顯示本機筆記 · 點 ☁️ 同步雲端' : '點 ☁️ 連接 Google Drive,即可跨裝置同步');
+  setStatus(localStorage.getItem('cloudnotes.linked') ? '已顯示本機筆記 · 點 ☁️ 同步雲端' : '點 ☁️ 連接 Google Drive,即可跨裝置同步');
   initClips();
-  if (await odHandleRedirect()) sync(false, OD);
 }
 if (authed()) bootApp(); else showGate();
 // 開啟後第一次點畫面時,自動同步一次(瀏覽器需要使用者操作才允許開登入視窗)
 let firstTap = true;
 document.addEventListener('pointerdown', () => {
   if (!firstTap) return; firstTap = false;
-  if ((localStorage.getItem('cloudnotes.linked') && !token || OD.configured() && !odTok) && !cur) sync(false);
+  if (localStorage.getItem('cloudnotes.linked') && !token && !cur) sync(false);
 }, true);
 </script>
 </body>
