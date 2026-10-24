@@ -214,6 +214,7 @@ dialog .row{display:flex;gap:8px;justify-content:flex-end;margin-top:16px;flex-w
   <aside id="side">
     <div class="brand"><img src="icon-192.png" alt=""><span>雲筆記</span></div>
     <div class="newrow"><button class="newbtn" id="newBtn">＋ 新增筆記</button><button class="newmore" id="newMore" aria-label="更多筆記類型">▾</button></div>
+    <button class="ni" id="pdfNavBtn" style="margin:0 14px 8px;width:calc(100% - 28px)"><span class="ico">📄</span><span class="nn">匯入 PDF 標注</span></button>
     <nav id="nav"></nav>
     <div class="sidefoot">
       <button class="ni js-sync" id="syncBtn"><span class="ico">☁️</span><span class="nn">同步</span></button>
@@ -735,6 +736,7 @@ ebody.addEventListener('input', e => {
 $('#fab').onclick = () => $('#newDlg').showModal();
 $('#newBtn').onclick = () => { closeMenu(); newNote('text'); };
 $('#newMore').onclick = () => $('#newDlg').showModal();
+$('#pdfNavBtn').onclick = () => { closeMenu(); $('#pdfFile').click(); };
 $('#newCancel').onclick = () => $('#newDlg').close();
 $$('[data-new]').forEach(b => b.onclick = () => { $('#newDlg').close(); closeMenu(); if (b.dataset.new === 'pdf') $('#pdfFile').click(); else newNote(b.dataset.new); });
 $('#search').oninput = render;
