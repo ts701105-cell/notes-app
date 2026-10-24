@@ -849,9 +849,10 @@ $('#dots').innerHTML = PALETTE.map((c, i) => `<button class="dot${i ? '' : ' on'
 let usePr = localStorage.getItem('cloudnotes.pr') !== '0', imgSel = null, imgDrag = null;
 function startInk() {
   ink = cur.ink; if (!ink.imgs) ink.imgs = []; imgSel = null; imgDrag = null; undoS = []; redoS = []; drawing = null; erasing = null; touches.clear();
-  $('#inkWrap').scrollTop = 0; $('#inkWrap').scrollLeft = 0; zoom = 1;
+  $('#inkWrap').scrollTop = 0; $('#inkWrap').scrollLeft = 0; zoom = 1; pgBottomFix = false;
   $('#inkEd').classList.toggle('pdfm', !!cur.pdf); pgUI();
   sizeCanvas(); updInkUI();
+  if (pgGoBottom) { pgGoBottom = false; pgBottomFix = true; $('#inkWrap').scrollTop = $('#inkWrap').scrollHeight; }
   if (cur.pdf && cur.pdf.v) pdfShow();
 }
 
@@ -1002,7 +1003,7 @@ async function pdfDoc(key, P) {
 }
 const pageInk = p => ({ h: p.h, bg: 'blank', strokes: p.strokes || [], imgs: [{ id: 'pg' + uid(), x: 0, y: 0, w: p.w || INK_W, h: p.h, d: p.d }] });
 const pgCount = P => P.v ? P.count : P.pages.length;
-let pdfMissing = false, showTok = 0;
+let pdfMissing = false, showTok = 0, pgGoBottom = false, pgBottomFix = false;
 async function renderPdfPage(doc, i, maxW) {
   const pg = await doc.getPage(i + 1), v0 = pg.getViewport({ scale: 1 });
   const k = Math.min(2.2, maxW / v0.width), vp = pg.getViewport({ scale: k });
@@ -1024,7 +1025,8 @@ async function pdfShow() {
     if (tok !== showTok || cur !== n) return;
     imgCache.set(m.id, c);
     const h = Math.round(INK_W * c.height / c.width);
-    if (h !== m.h) { m.h = h; n.ink.h = h; (P.hs || (P.hs = {}))[P.i] = h; persist(); sizeCanvas(); } else redraw();
+    if (h !== m.h) { m.h = h; n.ink.h = h; (P.hs || (P.hs = {}))[P.i] = h; persist(); sizeCanvas(); if (pgBottomFix) $('#inkWrap').scrollTop = $('#inkWrap').scrollHeight; } else redraw();
+    pgBottomFix = false;
   } catch (e) { console.error(e); toast('這一頁轉換失敗'); }
 }
 async function importPdf(file) {
@@ -1269,6 +1271,39 @@ function endPtr(e) {
 }
 cv.addEventListener('pointerup', endPtr);
 cv.addEventListener('pointercancel', endPtr);
+
+/* PDF:兩指上下滑動換頁(捲到頁面底部再往上滑 → 下一頁;捲到頂部再往下滑 → 上一頁) */
+let g2 = null;
+const fingers2 = () => [...touches.values()].filter(t => t.type === 'touch');
+const edgeInfo = () => { const w = $('#inkWrap'); return { top: w.scrollTop <= 3, bot: w.scrollTop + w.clientHeight >= w.scrollHeight - 3 }; };
+cv.addEventListener('pointerdown', () => {
+  if (!cur || !cur.pdf || g2) return;
+  const f = fingers2(); if (f.length !== 2) return;
+  g2 = { x0: (f[0].x + f[1].x) / 2, y0: (f[0].y + f[1].y) / 2, x1: 0, y1: 0, ...(() => { const e = edgeInfo(); return { top: e.top, bot: e.bot }; })() };
+  g2.x1 = g2.x0; g2.y1 = g2.y0;
+});
+cv.addEventListener('pointermove', () => {
+  if (!g2) return;
+  const f = fingers2(); if (f.length < 2) return;
+  g2.x1 = (f[0].x + f[1].x) / 2; g2.y1 = (f[0].y + f[1].y) / 2;
+});
+function endG2() {
+  if (!g2) return; const g = g2; g2 = null;
+  const dy = g.y1 - g.y0, dx = g.x1 - g.x0, e = edgeInfo();
+  if (Math.abs(dy) < 70 || Math.abs(dy) < Math.abs(dx) * 1.5 || !cur || !cur.pdf) return;
+  const N = pgCount(cur.pdf), i = cur.pdf.i;
+  if (dy < 0 && g.bot && e.bot) { if (i >= N - 1) toast('已經是最後一頁'); else { pdfSwitch(i + 1); toast('第 ' + (i + 2) + ' / ' + N + ' 頁'); } }
+  else if (dy > 0 && g.top && e.top) { if (i <= 0) toast('已經是第一頁'); else { pgGoBottom = true; pdfSwitch(i - 1); toast('第 ' + i + ' / ' + N + ' 頁'); } }
+}
+cv.addEventListener('pointerup', endG2);
+cv.addEventListener('pointercancel', endG2);
+/* 電腦鍵盤:← → PageUp PageDown 換頁 */
+addEventListener('keydown', e => {
+  if (!cur || !cur.pdf || !$('#inkEd').classList.contains('open') || e.target.closest('input,textarea,dialog')) return;
+  const k = e.key;
+  if (k === 'PageDown' || k === 'ArrowRight') { e.preventDefault(); pdfSwitch(cur.pdf.i + 1); }
+  else if (k === 'PageUp' || k === 'ArrowLeft') { e.preventDefault(); pdfSwitch(cur.pdf.i - 1); }
+});
 cv.addEventListener('contextmenu', e => e.preventDefault());
 
 function undo() {
