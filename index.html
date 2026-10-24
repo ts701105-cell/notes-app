@@ -280,7 +280,7 @@ dialog .row{display:flex;gap:8px;justify-content:flex-end;margin-top:16px;flex-w
         <button class="ib" data-pin aria-label="置頂" title="置頂">📌</button>
         <button class="ib" data-del aria-label="刪除" title="移到垃圾桶">🗑️</button>
       </div>
-      <div id="pgNav"><button class="ib" id="pgPrev" aria-label="上一頁">‹</button><button class="tb" id="pgNum">1 / 1</button><button class="ib" id="pgNext" aria-label="下一頁">›</button><button class="tb" id="pgRelink" hidden>📎 選取 PDF 檔</button><span class="sep"></span><button class="ib" id="zOut" aria-label="縮小">－</button><span id="zTxt">100%</span><button class="ib" id="zIn" aria-label="放大">＋</button></div>
+      <div id="pgNav"><button class="ib" id="pgPrev" aria-label="上一頁">‹</button><button class="tb" id="pgNum">1 / 1</button><button class="ib" id="pgNext" aria-label="下一頁">›</button><button class="tb" id="pgRelink" hidden>📎 取得 PDF 檔</button><span class="sep"></span><button class="ib" id="zOut" aria-label="縮小">－</button><span id="zTxt">100%</span><button class="ib" id="zIn" aria-label="放大">＋</button></div>
       <div id="inkWrap"><canvas id="cv"></canvas></div>
       <div class="tools" id="inkTools">
         <button class="tb" id="imgSm" hidden>圖－</button>
@@ -523,7 +523,7 @@ function textThumb(n) {
 function wipe(n) {
   n.title = ''; n.body = ''; n.html = ''; n.tags = []; n.src = '';
   if (n.ink) n.ink = { h: 1400, bg: 'blank', strokes: [], imgs: [] };
-  if (n.pdf && n.pdf.key) pdfDB.del(n.pdf.key);
+  if (n.pdf && n.pdf.key) { pdfDB.del(n.pdf.key); if (n.pdf.fid && token && Date.now() < tokenExp - 60000) fetch('https://www.googleapis.com/drive/v3/files/' + n.pdf.fid, { method: 'DELETE', headers: { Authorization: 'Bearer ' + token } }).catch(() => {}); }
   n.pdf = null;
   if (n.mind) { const r = uid(); n.mind = { root: r, nodes: { [r]: { id: r, t: '', p: null, ch: [], col: false } }, v: null }; }
 }
@@ -978,9 +978,22 @@ const pdfDB = {
   del(k) { return this.tx('readwrite', st => st.delete(k)).catch(() => {}); }
 };
 const pdfDocs = new Map();
-async function pdfDoc(key) {
+async function pdfFromDrive(P) {
+  if (!P || !P.fid || !token || Date.now() >= tokenExp - 60000) return null;
+  const bl = await (await api(`https://www.googleapis.com/drive/v3/files/${P.fid}?alt=media`)).blob();
+  await pdfDB.put(P.key, bl); return bl;
+}
+async function pdfUpload(P, blob) {
+  const bd = 'b' + uid(), meta = JSON.stringify({ name: 'cloudnotes-pdf-' + P.key + '.pdf', mimeType: 'application/pdf' });
+  const body = new Blob([`--${bd}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${meta}\r\n--${bd}\r\nContent-Type: application/pdf\r\n\r\n`, blob, `\r\n--${bd}--`]);
+  const r = await api('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', { method: 'POST', headers: { 'Content-Type': 'multipart/related; boundary=' + bd }, body });
+  return (await r.json()).id;
+}
+async function pdfDoc(key, P) {
   if (pdfDocs.has(key)) return pdfDocs.get(key);
-  const blob = await pdfDB.get(key); if (!blob) return null;
+  let blob = await pdfDB.get(key);
+  if (!blob && P && P.fid) { toast('從 Google Drive 下載 PDF…'); blob = await pdfFromDrive(P).catch(() => null); }
+  if (!blob) return null;
   const lib = await pdfLib(), doc = await lib.getDocument({ data: await blob.arrayBuffer(), cMapUrl: 'lib/cmaps/', cMapPacked: true }).promise;
   for (const [k, d] of pdfDocs) { try { d.destroy(); } catch (e) {} pdfDocs.delete(k); }
   pdfDocs.set(key, doc); return doc;
@@ -1000,10 +1013,10 @@ async function pdfShow() {
   const n = cur, P = n && n.pdf; if (!P || !P.v) return;
   const m = n.ink.imgs[0], tok = ++showTok;
   let doc = null;
-  try { doc = await pdfDoc(P.key); } catch (e) { toast('PDF 讀取失敗:' + (e.message || '')); }
+  try { doc = await pdfDoc(P.key, P); } catch (e) { toast('PDF 讀取失敗:' + (e.message || '')); }
   if (tok !== showTok || cur !== n) return;
   pdfMissing = !doc; pgUI();
-  if (!doc) { toast('這台裝置沒有這份 PDF 原檔,請按上方「選取 PDF 檔」'); return; }
+  if (!doc) { toast(P.fid ? '這台裝置還沒有這份 PDF,請按上方按鈕從 Google Drive 下載' : '這台裝置沒有這份 PDF 原檔,請按上方「選取 PDF 檔」'); return; }
   try {
     const c = await renderPdfPage(doc, P.i, 1400);
     if (tok !== showTok || cur !== n) return;
@@ -1028,7 +1041,7 @@ async function importPdf(file) {
     n.ink = pageInk({ h: 1414 });
     notes.push(n);
     if (view.nb === 'trash' || view.nb === 'pin') { view.nb = 'all'; saveView(); }
-    persist(); openNote(n);
+    persist(); openNote(n); autoSync();
     toast('已匯入 ' + doc.numPages + ' 頁,可直接標注');
   } catch (e) { console.error(e); toast('PDF 匯入失敗:' + (e.message || '未知錯誤')); }
 }
@@ -1065,7 +1078,14 @@ const setZoom = z => { zoom = Math.max(1, Math.min(4, z)); sizeCanvas(); };
 $('#zIn').onclick = () => setZoom(zoom + .5);
 $('#zOut').onclick = () => setZoom(zoom - .5);
 $('#pdfFile').onchange = async e => { const f = e.target.files[0]; e.target.value = ''; if (f) await importPdf(f); };
-$('#pgRelink').onclick = () => $('#pdfRelink').click();
+$('#pgRelink').onclick = async () => {
+  const n = cur, P = n && n.pdf; if (!P) return;
+  if (P.fid) {
+    try { toast('從 Google Drive 下載中…'); await getToken(true); if (await pdfFromDrive(P)) { pdfDocs.delete(P.key); pdfMissing = false; pdfShow(); toast('已下載 PDF'); return; } }
+    catch (e) { toast('無法從 Google Drive 下載,請手動選取 PDF 檔'); }
+  }
+  $('#pdfRelink').click();
+};
 $('#pdfRelink').onchange = async e => {
   const f = e.target.files[0]; e.target.value = ''; const n = cur;
   if (!f || !n || !n.pdf || !n.pdf.v) return;
@@ -1079,7 +1099,7 @@ async function pdfNoteBlob(n) {
   const P = n.pdf; let PW = 595.28, PH = 841.89, W = 1400, H = 0, pages = [], doc = null, idx = [];
   const N = pgCount(P);
   if (P.v) {
-    doc = await pdfDoc(P.key); if (!doc) throw new Error('這台裝置沒有原始 PDF 檔,請先在筆記上方重新選取');
+    doc = await pdfDoc(P.key, P); if (!doc) throw new Error('這台裝置沒有原始 PDF 檔,請先在筆記上方重新選取');
     const strokesOf = j => j === P.i ? n.ink.strokes : (P.s[j] || []);
     for (let j = 0; j < N; j++) if (N <= PDF_ALL_LIMIT || strokesOf(j).length) idx.push(j);
     if (!idx.length) throw new Error('還沒有任何標注可匯出');
@@ -1521,7 +1541,7 @@ $('#cpList').addEventListener('click', async e => {
   const c = JSON.parse(JSON.stringify(src));
   c.id = uid(); c.nb = nbId; c.created = now; c.updatedAt = now; c.deleted = false;
   delete c.pin; delete c.lock; delete c.gone;
-  if (c.pdf && c.pdf.key) { const ok = c.pdf.key, nk = uid(); c.pdf.key = nk; pdfDB.get(ok).then(bl => bl && pdfDB.put(nk, bl)).catch(() => {}); }
+  if (c.pdf && c.pdf.key) { const ok = c.pdf.key, nk = uid(); c.pdf.key = nk; delete c.pdf.fid; pdfDB.get(ok).then(bl => bl && pdfDB.put(nk, bl)).catch(() => {}); }
   if (same) c.title = (c.title || '無標題') + '(副本)';
   notes.push(c); persist(); render(); autoSync();
   const nm = nbId ? (nbs.find(x => x.id === nbId) || {}).name : '未分類';
@@ -1646,6 +1666,14 @@ async function sync(interactive) {
     nbs = merge(nbs, remoteNbs).filter(x => !(x.deleted && x.updatedAt < cutoff)); saveNbs();
     if (openId) cur = notes.find(n => n.id === openId) || cur;
     persist(); render();
+    for (const n of notes) {
+      const P = n.pdf;
+      if (n.deleted || !P || !P.v || P.fid) continue;
+      const bl = await pdfDB.get(P.key).catch(() => null); if (!bl) continue;
+      try { setStatus('上傳 PDF「' + (n.title || P.name || '').slice(0, 12) + '」…'); P.fid = await pdfUpload(P, bl); n.updatedAt = Date.now(); persist(); }
+      catch (e) { console.warn('pdf upload failed', e); }
+    }
+    if (cur && cur.pdf && cur.pdf.v && pdfMissing && cur.pdf.fid) pdfShow();
     const body = JSON.stringify({ version: 3, notes, notebooks: nbs });
     if (id) {
       await api(`https://www.googleapis.com/upload/drive/v3/files/${id}?uploadType=media`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body });
