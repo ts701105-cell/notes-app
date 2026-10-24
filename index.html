@@ -111,6 +111,14 @@ main#list{flex:1;overflow-y:auto;padding-bottom:90px}
 .fmt select{flex:none;border:1px solid var(--line);background:var(--card);color:var(--text);border-radius:6px;padding:5px 4px;font-size:13px}
 .fmt .sep{height:18px;margin:0 4px}
 #inkWrap{flex:1;overflow-y:auto;overflow-x:hidden;background:#d9dce1;overscroll-behavior:contain}
+#pgNav{display:none;align-items:center;gap:4px;padding:2px 10px;background:var(--card);border-bottom:1px solid var(--line);overflow-x:auto;flex:none;scrollbar-width:none}
+#inkEd.pdfm #pgNav{display:flex}
+#pgNav .ib{width:36px;height:36px;flex:none}
+#pgNav .tb{flex:none}
+#zTxt{font-size:13px;color:var(--sub);min-width:40px;text-align:center}
+body.fs-ink #pgNav{padding-right:150px}
+#inkEd.pdfm #moreBtn,#inkEd.pdfm #bgBtn{display:none}
+.dot.wh{box-shadow:inset 0 0 0 1px #b8bcc2}
 #cv{display:block;background:#fff;touch-action:none;margin:0 auto;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
 .tools{display:flex;gap:4px;align-items:center;overflow-x:auto;padding:6px 8px calc(6px + env(safe-area-inset-bottom));border-top:1px solid var(--line);background:var(--bg);scrollbar-width:none}
 .tools::-webkit-scrollbar{display:none}
@@ -272,6 +280,7 @@ dialog .row{display:flex;gap:8px;justify-content:flex-end;margin-top:16px;flex-w
         <button class="ib" data-pin aria-label="置頂" title="置頂">📌</button>
         <button class="ib" data-del aria-label="刪除" title="移到垃圾桶">🗑️</button>
       </div>
+      <div id="pgNav"><button class="ib" id="pgPrev" aria-label="上一頁">‹</button><button class="tb" id="pgNum">1 / 1</button><button class="ib" id="pgNext" aria-label="下一頁">›</button><span class="sep"></span><button class="ib" id="zOut" aria-label="縮小">－</button><span id="zTxt">100%</span><button class="ib" id="zIn" aria-label="放大">＋</button></div>
       <div id="inkWrap"><canvas id="cv"></canvas></div>
       <div class="tools" id="inkTools">
         <button class="tb" id="imgSm" hidden>圖－</button>
@@ -280,6 +289,7 @@ dialog .row{display:flex;gap:8px;justify-content:flex-end;margin-top:16px;flex-w
         <button class="tb on" data-tool="pen">✏️ 筆</button>
         <button class="tb" data-tool="hl">🖍️ 螢光</button>
         <button class="tb" data-tool="eraser">🧽 橡皮</button>
+        <button class="tb" data-tool="text">🔤 文字</button>
         <button class="tb" data-tool="hand">✋ 移動</button>
         <button class="tb" data-tool="img">🖼️ 移圖</button>
         <span class="sep"></span>
@@ -327,6 +337,7 @@ dialog .row{display:flex;gap:8px;justify-content:flex-end;margin-top:16px;flex-w
   <h2>新增筆記</h2>
   <button class="nt" data-new="text"><span>📝</span><div>文字筆記<small>可排版、待辦清單、插入圖片</small></div></button>
   <button class="nt" data-new="ink"><span>✍️</span><div>手寫筆記<small>手指或觸控筆書寫、畫圖</small></div></button>
+  <button class="nt" data-new="pdf"><span>📄</span><div>PDF 標注<small>匯入 PDF,用筆、螢光筆、文字標注塗寫</small></div></button>
   <button class="nt" data-new="mind"><span>🧠</span><div>心智圖<small>用節點整理想法</small></div></button>
   <div class="row"><button class="btn" id="newCancel">取消</button></div>
 </dialog>
@@ -359,6 +370,7 @@ dialog .row{display:flex;gap:8px;justify-content:flex-end;margin-top:16px;flex-w
   </div>
 </dialog>
 
+<input type="file" id="pdfFile" accept="application/pdf,.pdf" hidden>
 <div id="fsPill"><button class="ib" id="fsUndo" aria-label="復原">↶</button><button class="ib" id="fsRedo" aria-label="重做">↷</button><button class="ib" id="fsExit" aria-label="退出全螢幕" title="退出全螢幕">✕</button></div>
 <div class="meta" id="metaBar"><button class="chip" id="nbPick">📓 未分類</button><span id="metaTags" style="display:contents"></span><button class="chip" id="tagAdd">＋標籤</button><button class="chip" id="lockBtn">🔓 鎖定</button><button class="chip" id="cpBtn">⧉ 複製到…</button><button class="chip" id="fsBtn">⛶ 全螢幕</button><a class="chip" id="srcLink" target="_blank" rel="noopener" hidden>🔗 原網頁</a></div>
 
@@ -421,7 +433,7 @@ function inkThumb(n) {
       d += `<image href="${m.d}" x="${Math.round(m.x)}" y="${Math.round(m.y)}" width="${Math.round(m.w)}" height="${Math.round(m.h)}"/>`;
   }
   for (const s of strokes) {
-    if (!s.p || !s.p.length || s.p[0][1] > H + 40) continue;
+    if (!s.p || !s.p.length || s.p[0][1] > H + 40 || s.t === 'x') continue;
     const c = okColor(s.c), w = (s.t === 'h' ? s.w * 5 : s.w) || 4, op = s.t === 'h' ? .38 : 1;
     const pts = s.p.map(p => Math.round(p[0]) + ' ' + Math.round(p[1]));
     d += `<path d="M${pts[0]}${pts.length > 1 ? 'L' + pts.slice(1).join('L') : 'l0 .1'}" stroke="${c}" stroke-width="${w}" stroke-opacity="${op}" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`;
@@ -444,8 +456,8 @@ function noteIn(n) {
   if (view.nb === 'none') return !nbOf(n);
   return n.nb === view.nb && !!nbOf(n);
 }
-const TYPE_TAG = { text: '文字', ink: '手寫', mind: '心智圖' };
-const tagsOf = n => { const tt = TYPE_TAG[n.mind && n.mind.nodes ? 'mind' : n.ink && n.ink.strokes ? 'ink' : typeOf(n)] || TYPE_TAG.text, o = (n.tags || []).filter(t => t.toLowerCase() !== tt.toLowerCase()); return [tt, ...o]; };
+const TYPE_TAG = { text: '文字', ink: '手寫', mind: '心智圖', pdf: 'PDF' };
+const tagsOf = n => { const tt = TYPE_TAG[n.pdf ? 'pdf' : n.mind && n.mind.nodes ? 'mind' : n.ink && n.ink.strokes ? 'ink' : typeOf(n)] || TYPE_TAG.text, o = (n.tags || []).filter(t => t.toLowerCase() !== tt.toLowerCase()); return [tt, ...o]; };
 const hasTag = n => !view.tag || tagsOf(n).some(t => t.toLowerCase() === view.tag);
 const closeMenu = () => $('#app').classList.remove('menu');
 $('#menuBtn').onclick = () => $('#app').classList.toggle('menu');
@@ -502,6 +514,7 @@ function textThumb(n) {
 function wipe(n) {
   n.title = ''; n.body = ''; n.html = ''; n.tags = []; n.src = '';
   if (n.ink) n.ink = { h: 1400, bg: 'blank', strokes: [], imgs: [] };
+  n.pdf = null;
   if (n.mind) { const r = uid(); n.mind = { root: r, nodes: { [r]: { id: r, t: '', p: null, ch: [], col: false } }, v: null }; }
 }
 function restoreNote(n) { n.deleted = false; n.updatedAt = Date.now(); persist(); render(); toast('已還原到「' + nbName(n) + '」'); }
@@ -713,7 +726,7 @@ $('#fab').onclick = () => $('#newDlg').showModal();
 $('#newBtn').onclick = () => { closeMenu(); newNote('text'); };
 $('#newMore').onclick = () => $('#newDlg').showModal();
 $('#newCancel').onclick = () => $('#newDlg').close();
-$$('[data-new]').forEach(b => b.onclick = () => { $('#newDlg').close(); closeMenu(); newNote(b.dataset.new); });
+$$('[data-new]').forEach(b => b.onclick = () => { $('#newDlg').close(); closeMenu(); if (b.dataset.new === 'pdf') $('#pdfFile').click(); else newNote(b.dataset.new); });
 $('#search').oninput = render;
 
 /* ---------- 文字排版工具列 ---------- */
@@ -813,26 +826,32 @@ ebody.addEventListener('click', e => {
 });
 
 /* ---------- 手寫 ---------- */
-const INK_W = 1000, PALETTE = ['#1d2129', '#d93025', '#2f6fed', '#1e8e3e', '#f29900', '#9334e6'];
+const INK_W = 1000, PALETTE = ['#1d2129', '#d93025', '#2f6fed', '#1e8e3e', '#f29900', '#9334e6', '#ffffff'];
 const cv = $('#cv'), ctx = cv.getContext('2d');
-let ink = null, scale = 1, dpr = 1, tool = 'pen', color = PALETTE[0], pw = 5, hasPen = false;
+let zoom = 1, ink = null, scale = 1, dpr = 1, tool = 'pen', color = PALETTE[0], pw = 5, hasPen = false;
 let undoS = [], redoS = [], drawing = null, erasing = null, touches = new Map(), panLast = null;
 
 $('#dots').style.display = 'contents';
-$('#dots').innerHTML = PALETTE.map((c, i) => `<button class="dot${i ? '' : ' on'}" data-c="${c}" style="background:${c}" aria-label="顏色"></button>`).join('');
+$('#dots').innerHTML = PALETTE.map((c, i) => `<button class="dot${i ? '' : ' on'}${c === '#ffffff' ? ' wh' : ''}" data-c="${c}" style="background:${c}" aria-label="${c === '#ffffff' ? '白色(遮蓋用)' : '顏色'}"></button>`).join('');
 
 let usePr = localStorage.getItem('cloudnotes.pr') !== '0', imgSel = null, imgDrag = null;
 function startInk() {
   ink = cur.ink; if (!ink.imgs) ink.imgs = []; imgSel = null; imgDrag = null; undoS = []; redoS = []; drawing = null; erasing = null; touches.clear();
-  $('#inkWrap').scrollTop = 0;
+  $('#inkWrap').scrollTop = 0; $('#inkWrap').scrollLeft = 0; zoom = 1;
+  $('#inkEd').classList.toggle('pdfm', !!cur.pdf); pgUI();
   sizeCanvas(); updInkUI();
 }
 
 function sizeCanvas() {
   if (!ink) return;
-  const w = $('#inkWrap').clientWidth;
-  if (!w) return;
-  scale = w / INK_W; dpr = window.devicePixelRatio || 1;
+  const w0 = $('#inkWrap').clientWidth;
+  if (!w0) return;
+  dpr = window.devicePixelRatio || 1;
+  let z = Math.max(1, zoom);
+  while (z > 1 && (w0 * z * dpr) * (ink.h * w0 * z / INK_W * dpr) > 13e6) z = Math.round((z - .25) * 100) / 100;
+  zoom = z; const w = w0 * z;
+  scale = w / INK_W;
+  $('#inkWrap').style.overflowX = z > 1 ? 'auto' : 'hidden'; $('#zTxt').textContent = Math.round(z * 100) + '%';
   cv.style.width = w + 'px'; cv.style.height = ink.h * scale + 'px';
   cv.width = Math.round(w * dpr); cv.height = Math.round(ink.h * scale * dpr);
   redraw();
@@ -842,6 +861,11 @@ addEventListener('resize', () => { if (cur && cur.ink) sizeCanvas(); });
 const prW = pr => .35 + 1.3 * pr;
 function drawStroke(s, c = ctx) {
   const p = s.p; if (!p || !p.length) return;
+  if (s.t === 'x') {
+    c.save(); c.fillStyle = okColor(s.c); c.font = s.w + 'px ' + EX_FONT; c.textBaseline = 'top';
+    String(s.s || '').split('\n').forEach((l, i) => c.fillText(l, p[0][0], p[0][1] + i * s.w * 1.3));
+    c.restore(); return;
+  }
   c.save();
   c.lineCap = c.lineJoin = 'round';
   c.strokeStyle = c.fillStyle = okColor(s.c);
@@ -917,6 +941,106 @@ $('#prBtn').onclick = () => { usePr = !usePr; localStorage.setItem('cloudnotes.p
 $('#bgBtn').onclick = () => { ink.bg = ({ blank: 'lines', lines: 'grid', grid: 'blank' })[ink.bg]; touch(); redraw(); updInkUI(); };
 $('#moreBtn').onclick = () => { ink.h += 1000; touch(); sizeCanvas(); $('#inkWrap').scrollBy({ top: 600, behavior: 'smooth' }); };
 
+/* ---------- PDF 標注 ---------- */
+async function placeText(pt) {
+  if (cur && cur.lock) return;
+  const t = await askText('輸入要加上的文字');
+  if (!t || !ink) return;
+  const fs = ({ 3: 24, 5: 34, 9: 52 })[pw] || 34;
+  const s = { t: 'x', c: color, w: fs, p: [pt], s: t.slice(0, 500) };
+  ink.strokes.push(s); undoS.push({ a: 'add', s }); redoS = []; touch(); redraw(); updInkUI();
+}
+let pdfLibP = null;
+function loadScript(src) { return new Promise((res, rej) => { const e = document.createElement('script'); e.src = src; e.onload = res; e.onerror = () => rej(new Error('無法載入 PDF 元件,請確認網路後重試')); document.head.append(e); }); }
+function pdfLib() {
+  if (!pdfLibP) pdfLibP = loadScript('lib/pdf.min.js').then(() => { pdfjsLib.GlobalWorkerOptions.workerSrc = 'lib/pdf.worker.min.js'; return pdfjsLib; }).catch(e => { pdfLibP = null; throw e; });
+  return pdfLibP;
+}
+const PDF_MAX_PAGES = 40, PDF_MAX_CHARS = 14e6;
+async function importPdf(file) {
+  if (!file || !(/pdf$/i.test(file.type) || /\.pdf$/i.test(file.name))) { toast('這不是 PDF 檔'); return; }
+  toast('讀取 PDF 中…');
+  try {
+    const lib = await pdfLib(), buf = await file.arrayBuffer();
+    const doc = await lib.getDocument({ data: buf, cMapUrl: 'lib/cmaps/', cMapPacked: true }).promise;
+    const total = doc.numPages, count = Math.min(total, PDF_MAX_PAGES), pages = []; let chars = 0;
+    for (let i = 1; i <= count; i++) {
+      toast('轉換第 ' + i + ' / ' + count + ' 頁…');
+      const pg = await doc.getPage(i), v0 = pg.getViewport({ scale: 1 });
+      const k = Math.min(2.2, 1400 / v0.width), vp = pg.getViewport({ scale: k });
+      const c = document.createElement('canvas'); c.width = Math.round(vp.width); c.height = Math.round(vp.height);
+      const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height);
+      await pg.render({ canvasContext: g, viewport: vp }).promise;
+      const d = c.toDataURL('image/jpeg', .74);
+      if (chars + d.length > PDF_MAX_CHARS && pages.length) { toast('檔案太大,只匯入前 ' + pages.length + ' 頁'); break; }
+      chars += d.length;
+      pages.push({ d, w: INK_W, h: Math.round(INK_W * c.height / c.width), strokes: [] });
+      pg.cleanup();
+    }
+    doc.destroy();
+    if (!pages.length) throw new Error('PDF 沒有內容');
+    const n = { id: uid(), type: 'ink', title: file.name.replace(/\.pdf$/i, '').slice(0, 100), body: '', tags: [], nb: (!SPECIAL.includes(view.nb) && nbs.some(x => x.id === view.nb && !x.deleted)) ? view.nb : null, created: Date.now(), updatedAt: Date.now(), deleted: false };
+    n.pdf = { i: 0, pages: pages.map(p => ({ w: p.w, h: p.h, d: null, strokes: null })) };
+    n.ink = pageInk(pages[0]);
+    notes.push(n);
+    if (view.nb === 'trash' || view.nb === 'pin') { view.nb = 'all'; saveView(); }
+    persist(); openNote(n);
+    toast('已匯入 ' + pages.length + ' 頁' + (total > pages.length ? '(原檔共 ' + total + ' 頁,只匯入前 ' + pages.length + ' 頁)' : '') + ',可直接標注');
+    // 其餘頁面資料補進去(第 0 頁在 n.ink)
+    pages.forEach((p, i) => { if (i) { n.pdf.pages[i].d = p.d; n.pdf.pages[i].strokes = []; } });
+    persist();
+  } catch (e) { console.error(e); toast('PDF 匯入失敗:' + (e.message || '未知錯誤')); }
+}
+const pageInk = p => ({ h: p.h, bg: 'blank', strokes: p.strokes || [], imgs: [{ id: 'pg' + uid(), x: 0, y: 0, w: p.w, h: p.h, d: p.d }] });
+function pdfSwitch(j) {
+  const n = cur; if (!n || !n.pdf) return;
+  const P = n.pdf; j = Math.max(0, Math.min(P.pages.length - 1, j)); if (j === P.i) return;
+  const a = P.pages[P.i]; a.d = n.ink.imgs[0] && n.ink.imgs[0].d; a.strokes = n.ink.strokes;
+  const b = P.pages[j]; n.ink = pageInk(b); b.d = null; b.strokes = null; P.i = j;
+  imgCache.clear(); n.updatedAt = Date.now(); persist();
+  startInk();
+}
+function pgUI() {
+  const P = cur && cur.pdf; if (!P) return;
+  $('#pgNum').textContent = (P.i + 1) + ' / ' + P.pages.length;
+  $('#pgPrev').disabled = P.i === 0; $('#pgNext').disabled = P.i === P.pages.length - 1;
+}
+$('#pgPrev').onclick = () => cur && cur.pdf && pdfSwitch(cur.pdf.i - 1);
+$('#pgNext').onclick = () => cur && cur.pdf && pdfSwitch(cur.pdf.i + 1);
+$('#pgNum').onclick = async () => {
+  if (!cur || !cur.pdf) return;
+  const v = await askText('跳到第幾頁?(1–' + cur.pdf.pages.length + ')', String(cur.pdf.i + 1));
+  const j = parseInt(v, 10); if (j >= 1 && j <= cur.pdf.pages.length) pdfSwitch(j - 1);
+};
+const setZoom = z => { zoom = Math.max(1, Math.min(4, z)); sizeCanvas(); };
+$('#zIn').onclick = () => setZoom(zoom + .5);
+$('#zOut').onclick = () => setZoom(zoom - .5);
+$('#pdfFile').onchange = async e => { const f = e.target.files[0]; e.target.value = ''; if (f) await importPdf(f); };
+async function pdfNoteBlob(n) {
+  const P = n.pdf, outs = []; let PW = 595.28, PH = 841.89;
+  for (let j = 0; j < P.pages.length; j++) {
+    const pg = j === P.i ? { d: n.ink.imgs[0].d, strokes: n.ink.strokes, w: P.pages[j].w, h: P.pages[j].h } : P.pages[j];
+    if (!pg.d) continue;
+    const im = await loadImg(pg.d), k = im.naturalWidth / INK_W;
+    const c = document.createElement('canvas'); c.width = im.naturalWidth; c.height = Math.round(pg.h * k);
+    const g = c.getContext('2d'); g.drawImage(im, 0, 0, c.width, c.height);
+    g.setTransform(k, 0, 0, k, 0, 0); for (const s of pg.strokes || []) drawStroke(s, g);
+    outs.push(c);
+  }
+  if (!outs.length) throw new Error('沒有可匯出的頁面');
+  if (outs[0].width > outs[0].height * 1.1) { PW = 841.89; PH = 595.28; }
+  const W = 1400, H = Math.round(W * PH / PW), pages = [];
+  for (const c of outs) {
+    const pc = document.createElement('canvas'); pc.width = W; pc.height = H;
+    const g = pc.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, W, H);
+    const k = Math.min(W / c.width, H / c.height), w = c.width * k, h = c.height * k;
+    g.drawImage(c, (W - w) / 2, (H - h) / 2, w, h);
+    const bytes = await new Promise(r => pc.toBlob(r, 'image/jpeg', .9)).then(b => b.arrayBuffer()).then(a => new Uint8Array(a));
+    pages.push({ w: W, h: H, bytes });
+  }
+  return pdfFrom(pages, PW, PH);
+}
+
 /* 圖片 */
 async function addImageFile(file) {
   if (!ink || !file || !/^image\//.test(file.type)) { toast('這不是圖片檔'); return; }
@@ -962,10 +1086,20 @@ function pos(e) { const r = cv.getBoundingClientRect(); return [Math.round((e.cl
 const prOf = e => (usePr && e.pointerType === 'pen' && e.pressure > 0) ? e.pressure : null;
 const capture = e => { try { cv.setPointerCapture(e.pointerId); } catch (x) {} };
 
+function textBox(s) {
+  ctx.save(); ctx.font = s.w + 'px ' + EX_FONT;
+  const ls = String(s.s || '').split('\n'); let w = 0; for (const l of ls) w = Math.max(w, ctx.measureText(l).width);
+  ctx.restore(); return [s.p[0][0], s.p[0][1], w, ls.length * s.w * 1.3];
+}
 function eraseAt(pt) {
   const R = 20 / Math.max(scale * 2.2, .3) + 8;
   for (let i = ink.strokes.length - 1; i >= 0; i--) {
     const s = ink.strokes[i];
+    if (s.t === 'x') {
+      const b = textBox(s);
+      if (pt[0] >= b[0] - R && pt[0] <= b[0] + b[2] + R && pt[1] >= b[1] - R && pt[1] <= b[1] + b[3] + R) { erasing.push([i, s]); ink.strokes.splice(i, 1); redraw(); }
+      continue;
+    }
     if (s.p.some(q => Math.hypot(q[0] - pt[0], q[1] - pt[1]) < R + (s.t === 'h' ? s.w * 2.5 : s.w / 2))) {
       erasing.push([i, s]); ink.strokes.splice(i, 1); redraw();
     }
@@ -992,6 +1126,7 @@ cv.addEventListener('pointerdown', e => {
     redraw(); updInkUI(); return;
   }
   if (tool === 'eraser') { erasing = []; eraseAt(pt); return; }
+  if (tool === 'text') { placeText(pt); return; }
   const pr = prOf(e);
   if (pr != null) pt.push(Math.round(pr * 100) / 100);
   drawing = { t: tool === 'hl' ? 'h' : 'p', c: color, w: pw, p: [pt], id: e.pointerId };
@@ -1002,7 +1137,7 @@ cv.addEventListener('pointerdown', e => {
 cv.addEventListener('pointermove', e => {
   const t = touches.get(e.pointerId); if (!t) return;
   t.x = e.clientX; t.y = e.clientY;
-  if (panLast && panLast.id === e.pointerId) { $('#inkWrap').scrollTop -= e.clientY - panLast.y; panLast.y = e.clientY; panLast.x = e.clientX; return; }
+  if (panLast && panLast.id === e.pointerId) { $('#inkWrap').scrollTop -= e.clientY - panLast.y; $('#inkWrap').scrollLeft -= e.clientX - panLast.x; panLast.y = e.clientY; panLast.x = e.clientX; return; }
   if (imgDrag && imgDrag.id === e.pointerId) { const pt = pos(e); imgDrag.m.x = pt[0] - imgDrag.dx; imgDrag.m.y = pt[1] - imgDrag.dy; redraw(); return; }
   if (erasing) { eraseAt(pos(e)); return; }
   if (!drawing || drawing.id !== e.pointerId) return;
@@ -1034,7 +1169,7 @@ function endPtr(e) {
     const s = drawing; drawing = null; delete s.id; delete s.lp;
     if (e.type !== 'pointercancel' || s.p.length > 1) {
       ink.strokes.push(s); undoS.push({ a: 'add', s }); redoS = [];
-      if (s.p.some(q => q[1] > ink.h - 160)) { ink.h += 700; sizeCanvas(); } else redraw();
+      if (!cur.pdf && s.p.some(q => q[1] > ink.h - 160)) { ink.h += 700; sizeCanvas(); } else redraw();
       touch();
     } else redraw();
     updInkUI();
@@ -1583,7 +1718,7 @@ async function inkCanvas(n) {
   for (const m of I.imgs || []) if (/^data:image\/(jpeg|png|webp);base64,/.test(m.d)) { try { imgs.push([m, await loadImg(m.d)]); } catch (e) {} }
   let maxY = 0;
   for (const s of I.strokes) for (const p of s.p) if (p[1] > maxY) maxY = p[1];
-  for (const m of I.imgs || []) maxY = Math.max(maxY, m.y + Math.min(m.h, 1100));
+  for (const m of I.imgs || []) maxY = Math.max(maxY, m.y + (n.pdf ? m.h : Math.min(m.h, 1100)));
   const HEAD = 110, bodyH = Math.min(I.h, Math.max(700, Math.ceil(maxY + 80))), H = bodyH + HEAD, k = Math.min(1.6, 16000 / H);
   const c = document.createElement('canvas'); c.width = Math.round(INK_W * k); c.height = Math.round(H * k);
   const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height);
@@ -1601,7 +1736,7 @@ async function inkCanvas(n) {
   }
   const hard = [];
   for (const [m, im] of imgs) {
-    const f = Math.min(1, 1100 / m.h), w = m.w * f, h = m.h * f;
+    const f = n.pdf ? 1 : Math.min(1, 1100 / m.h), w = m.w * f, h = m.h * f;
     g.drawImage(im, m.x + (m.w - w) / 2, m.y, w, h); hard.push([Math.floor((HEAD + m.y) * k), Math.ceil((HEAD + m.y + h) * k)]);
   }
   for (const s of I.strokes) drawStroke(s, g);
@@ -1699,9 +1834,9 @@ async function exportNote(fmt) {
   commit(); const n = cur, t = typeOf(n);
   toast('產生中,請稍候…');
   try {
-    const cv = t === 'text' ? await textCanvas(n) : t === 'ink' ? await inkCanvas(n) : await mindCanvas(n);
+    const cv = (fmt === 'pdf' && n.pdf) ? null : t === 'text' ? await textCanvas(n) : t === 'ink' ? await inkCanvas(n) : await mindCanvas(n);
     const base = ((n.title || '筆記').replace(/[\\/:*?"<>|\r\n]+/g, ' ').trim().slice(0, 60) || '筆記') + '_' + new Date().toISOString().slice(0, 10);
-    if (fmt === 'pdf') download(await canvasToPdf(cv, t === 'mind'), base + '.pdf');
+    if (fmt === 'pdf') download(n.pdf ? await pdfNoteBlob(n) : await canvasToPdf(cv, t === 'mind'), base + '.pdf');
     else {
       const blob = await new Promise(r => cv.toBlob(r, fmt === 'png' ? 'image/png' : 'image/jpeg', .92));
       if (!blob) throw new Error('筆記太長,無法產生圖片,請改用 PDF');
