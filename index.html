@@ -364,6 +364,8 @@ dialog .row{display:flex;gap:8px;justify-content:flex-end;margin-top:16px;flex-w
   <div class="hint">到 Google Cloud Console 建立「網頁應用程式」類型的 OAuth 用戶端 ID,並把本 App 網址加入「已授權的 JavaScript 來源」。筆記會存成你雲端硬碟中的 notes-sync.json,App 只能存取它自己建立的檔案。</div>
   <label>儲存空間</label>
   <div class="hint" id="stoInfo">計算中…</div>
+  <div class="hint" id="verInfo"></div>
+  <button class="btn" id="updBtn" type="button">立即更新到最新版</button>
   <div class="hint" id="gdInfo"></div>
   <button class="btn" id="gdBtn" type="button">查詢 Google Drive 用量</button>
   <div id="stoList"></div>
@@ -2042,7 +2044,18 @@ async function gdUsage(interactive) {
   } catch (e) { info.textContent = '查詢失敗:' + (e.message || '請稍後再試'); }
 }
 $('#gdBtn').onclick = () => gdUsage(true);
-$('#setBtn').onclick = () => { $('#cid').value = cid(); $('#dlg').showModal(); showStorage(); $('#gdInfo').textContent = ''; if (GD.ready()) gdUsage(false); };
+async function showVer() {
+  let v = '';
+  try { const ks = await caches.keys(); v = (ks.find(k => /^cloudnotes-v\d+$/.test(k)) || '').replace('cloudnotes-', ''); } catch (e) {}
+  $('#verInfo').textContent = 'App 版本:' + (v || '未知') + (v ? '(最新版會比這個數字大時,請按下方按鈕更新)' : '');
+}
+$('#updBtn').onclick = async () => {
+  saveNow(); toast('更新中…');
+  try { const rs = await navigator.serviceWorker.getRegistrations(); for (const r of rs) await r.unregister(); } catch (e) {}
+  try { for (const k of await caches.keys()) await caches.delete(k); } catch (e) {}
+  location.href = location.pathname + '?v=' + Date.now();
+};
+$('#setBtn').onclick = () => { $('#cid').value = cid(); $('#dlg').showModal(); showStorage(); showVer(); $('#gdInfo').textContent = ''; if (GD.ready()) gdUsage(false); };
 $('#cancel').onclick = () => $('#dlg').close();
 $('#save').onclick = () => { localStorage.setItem(CID_KEY, $('#cid').value.trim()); token = null; $('#dlg').close(); setStatus('設定已儲存,點 ☁️ 開始同步'); };
 $('#exportBtn').onclick = () => {
