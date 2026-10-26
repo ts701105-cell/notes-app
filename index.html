@@ -151,6 +151,8 @@ body.fs-ink #pgNav{padding-right:150px}
 .au .tb{padding:4px 8px}
 .chip.rec{background:#d93025;color:#fff;border-color:#d93025}
 body.fs-ink #audioBox{display:none!important}
+.au .tx{width:100%;white-space:pre-wrap;font-size:13px;line-height:1.6;background:var(--card);border-radius:8px;padding:8px;max-height:30vh;overflow:auto;user-select:text;-webkit-user-select:text}
+.au .st{width:100%;font-size:12px;color:var(--accent)}
 dialog a{color:var(--accent)}
 body.fs #side,body.fs #listPane{display:none!important}
 body.fs-ink #inkEd .bar,body.fs-ink #metaBar{display:none!important}
@@ -375,6 +377,9 @@ dialog .row{display:flex;gap:8px;justify-content:flex-end;margin-top:16px;flex-w
   <label for="cid">OAuth 用戶端 ID</label>
   <input id="cid" placeholder="xxxxxxxx.apps.googleusercontent.com" autocomplete="off">
   <div class="hint">到 Google Cloud Console 建立「網頁應用程式」類型的 OAuth 用戶端 ID,並把本 App 網址加入「已授權的 JavaScript 來源」。筆記會存成你雲端硬碟中的 notes-sync.json,App 只能存取它自己建立的檔案。</div>
+  <label for="asrSel">錄音轉文字(在這台裝置上辨識,錄音不會上傳)</label>
+  <select id="asrSel"><option value="tiny">快速(約 40 MB,準確度較低)</option><option value="base">標準(約 80 MB)</option><option value="small">較準確(約 250 MB,較慢)</option></select>
+  <label style="display:flex;gap:8px;align-items:center;margin-top:6px"><input type="checkbox" id="asrAuto" style="width:auto"> 錄音結束後自動轉文字</label>
   <label>儲存空間</label>
   <div class="hint" id="stoInfo">計算中…</div>
   <div class="hint" id="verInfo"></div>
@@ -2065,11 +2070,12 @@ async function auAdd(note, blob, name, dur) {
   (note.audio || (note.audio = [])).push(a); note.updatedAt = Date.now(); persist();
   if (cur === note) renderAudio();
   toast('已加入錄音「' + a.name + '」'); autoSync();
+  return a;
 }
 function renderAudio() {
   const box = $('#audioBox'); if (!box) return;
   const L = (cur && cur.audio) || [];
-  box.innerHTML = L.map(a => `<div class="au" data-id="${esc(a.id)}"><span>🎵</span><span class="nm">${esc(a.name)}<br><small>${[fmtDur(a.dur), mb(a.size || 0)].filter(Boolean).join(' · ')}${a.fid ? ' · ☁️' : ''}</small></span><button class="tb" data-au="play">▶ 播放</button><button class="tb" data-au="dl">⬇ 下載</button>${cur.lock ? '' : '<button class="tb" data-au="del">🗑</button>'}</div>`).join('');
+  box.innerHTML = L.map(a => `<div class="au" data-id="${esc(a.id)}"><span>🎵</span><span class="nm">${esc(a.name)}<br><small>${[fmtDur(a.dur), mb(a.size || 0)].filter(Boolean).join(' · ')}${a.fid ? ' · ☁️' : ''}</small></span><button class="tb" data-au="play">▶ 播放</button><button class="tb" data-au="dl">⬇ 下載</button>${a.text ? '<button class="tb" data-au="txt">📄 逐字稿</button>' : (cur.lock ? '' : '<button class="tb" data-au="asr">📝 轉文字</button>')}${cur.lock ? '' : '<button class="tb" data-au="del">🗑</button>'}${auState.has(a.id) ? '<div class="st" data-st>' + esc(auState.get(a.id)) + ' <button class="tb" data-au="cancel">取消</button></div>' : ''}${a.text && openTx.has(a.id) ? '<div class="tx">' + esc(a.text) + '</div><div style="width:100%;display:flex;gap:6px;flex-wrap:wrap"><button class="tb" data-au="copy">複製</button>' + (typeOf(cur) === 'text' && !cur.lock ? '<button class="tb" data-au="ins">插入筆記</button>' : '') + '<button class="tb" data-au="txtdl">下載 TXT</button>' + (cur.lock ? '' : '<button class="tb" data-au="re">重新轉換</button>') + '</div>' : ''}</div>`).join('');
 }
 $('#audioBox').addEventListener('click', async e => {
   const b = e.target.closest('[data-au]'), row = e.target.closest('.au'); if (!b || !row || !cur) return;
@@ -2082,12 +2088,109 @@ $('#audioBox').addEventListener('click', async e => {
   } else if (b.dataset.au === 'dl') {
     const bl = await auBlob(a); if (!bl) { toast('找不到這個錄音檔'); return; }
     download(bl, safeName(a.name) + '.' + auExt(a.mime)); toast('已下載錄音');
+  } else if (b.dataset.au === 'asr' || b.dataset.au === 're') {
+    if (cur.lock) { toast('筆記已鎖定,請先解除鎖定'); return; }
+    auTranscribe(cur, a);
+  } else if (b.dataset.au === 'cancel') { asrCancel = true; toast('取消中…');
+  } else if (b.dataset.au === 'txt') { if (openTx.has(a.id)) openTx.delete(a.id); else openTx.add(a.id); renderAudio();
+  } else if (b.dataset.au === 'copy') { try { await navigator.clipboard.writeText(a.text); toast('已複製逐字稿'); } catch (e) { toast('無法複製,請長按文字選取'); }
+  } else if (b.dataset.au === 'ins') { insertTranscript(cur, a); toast('已插入筆記');
+  } else if (b.dataset.au === 'txtdl') { download(new Blob([a.text], { type: 'text/plain;charset=utf-8' }), safeName(a.name) + '_逐字稿.txt');
   } else if (b.dataset.au === 'del') {
     if (cur.lock) { toast('筆記已鎖定,請先解除鎖定'); return; }
     if (!(await askConfirm('刪除這個錄音?刪除後無法還原'))) return;
     cur.audio = cur.audio.filter(x => x !== a); cur.updatedAt = Date.now(); pdfDB.del('au:' + a.id); gdDelFile(a.fid); persist(); renderAudio(); renderMeta();
   }
 });
+/* ---------- 錄音轉文字(在這台裝置上用 Whisper 辨識,錄音不會上傳)---------- */
+const ASR_MODELS = { tiny: ['Xenova/whisper-tiny', '約 40 MB'], base: ['Xenova/whisper-base', '約 80 MB'], small: ['Xenova/whisper-small', '約 250 MB'] };
+const asrKey = () => ASR_MODELS[localStorage.getItem('cloudnotes.asr')] ? localStorage.getItem('cloudnotes.asr') : 'base';
+const ASR_MAX_MIN = 45;
+const auState = new Map(), openTx = new Set();
+let asrW = null, asrBusy = false, asrCancel = false, s2tMap = null;
+const setAuState = (id, t) => { if (t == null) auState.delete(id); else auState.set(id, t); const row = document.querySelector(`.au[data-id="${id}"] [data-st]`); if (row && t != null) row.firstChild.textContent = t + ' '; else renderAudio(); };
+async function toTrad(text) {
+  if (!s2tMap) { const j = await (await fetch('lib/s2t.json')).json(); const T = [...j.t]; s2tMap = new Map([...j.s].map((c, i) => [c, T[i]])); }
+  return [...text].map(c => s2tMap.get(c) || c).join('');
+}
+function asrWorker() {
+  if (!asrW) { asrW = new Worker('lib/whisper-worker.js', { type: 'module' }); }
+  return asrW;
+}
+function asrCall(msg, onProg) {
+  return new Promise((res, rej) => {
+    const w = asrWorker();
+    const done = () => { w.removeEventListener('message', h); w.removeEventListener('error', er); };
+    const h = ev => { const m = ev.data; if (m.type === 'progress') { onProg && onProg(m.p); return; } done(); if (m.type === 'error') rej(new Error(m.msg)); else res(m); };
+    const er = ev => { done(); try { w.terminate(); } catch (e) {} asrW = null; rej(new Error('無法載入轉文字元件' + (ev && ev.message ? '(' + ev.message + ')' : ''))); };
+    w.addEventListener('message', h); w.addEventListener('error', er);
+    w.postMessage(msg, msg.audio ? [msg.audio.buffer] : []);
+  });
+}
+async function auPcm(blob) {
+  const AC = window.AudioContext || window.webkitAudioContext; if (!AC) throw new Error('這個瀏覽器無法解碼音檔');
+  const ctx = new AC({ sampleRate: 16000 });
+  try {
+    const buf = await ctx.decodeAudioData(await blob.arrayBuffer());
+    const n = buf.length, out = new Float32Array(n), ch = buf.numberOfChannels;
+    for (let c = 0; c < ch; c++) { const d = buf.getChannelData(c); for (let i = 0; i < n; i++) out[i] += d[i] / ch; }
+    return out;
+  } catch (e) { throw new Error('無法解碼這個音檔格式(請改用 m4a、mp3 或 wav)'); }
+  finally { try { ctx.close(); } catch (e) {} }
+}
+function splitAudio(pcm) {
+  const SR = 16000, W = 30 * SR, out = []; let pos = 0;
+  while (pos < pcm.length) {
+    let end = Math.min(pcm.length, pos + W);
+    if (end < pcm.length) { // 在視窗尾端 4 秒內找最安靜的位置切開,避免把字切成兩半
+      const from = Math.max(pos + 10 * SR, end - 4 * SR); let best = end, bv = Infinity;
+      for (let f = from; f + 1600 <= end; f += 800) { let s = 0; for (let i = f; i < f + 1600; i++) s += pcm[i] * pcm[i]; if (s < bv) { bv = s; best = f + 800; } }
+      end = Math.min(end, best);
+    }
+    out.push(pcm.slice(pos, end)); pos = end;
+  }
+  return out;
+}
+const rmsOf = a => { let s = 0; for (let i = 0; i < a.length; i += 4) s += a[i] * a[i]; return Math.sqrt(s / Math.max(1, a.length / 4)); };
+function insertTranscript(note, a) {
+  if (!note || typeOf(note) !== 'text' || !a.text || note.lock) return;
+  const html = '<div><br></div><div><b>【錄音逐字稿】' + esc(a.name) + '</b></div>' + a.text.split('\n').filter(Boolean).map(l => '<div>' + esc(l) + '</div>').join('');
+  if (cur === note) { ebody.insertAdjacentHTML('beforeend', html); ebody.dispatchEvent(new Event('input', { bubbles: true })); }
+  else { note.html = (note.html != null ? note.html : plainToHtml(note.body)) + html; note.body = (note.body || '') + '\n\n【錄音逐字稿】' + a.name + '\n' + a.text; note.updatedAt = Date.now(); persist(); }
+}
+async function auTranscribe(note, a, auto) {
+  if (asrBusy) { toast('正在轉另一段錄音,請稍候'); return; }
+  const key = asrKey(), [model, size] = ASR_MODELS[key], seenKey = 'cloudnotes.asrdl:' + key;
+  if (!localStorage.getItem(seenKey) && !(await askConfirm('第一次轉文字要下載辨識模型(' + size + '),建議連上 Wi-Fi。下載後可離線使用。要開始嗎?'))) { if (auto) toast('之後可按錄音旁的「📝 轉文字」'); return; }
+  asrBusy = true; asrCancel = false; setAuState(a.id, '準備中…');
+  try {
+    const blob = await auBlob(a); if (!blob) throw new Error('找不到這個錄音檔');
+    setAuState(a.id, '解碼音檔…');
+    const pcm = await auPcm(blob);
+    if (pcm.length > ASR_MAX_MIN * 60 * 16000) throw new Error('錄音超過 ' + ASR_MAX_MIN + ' 分鐘,請先分段再轉文字');
+    const chunks = splitAudio(pcm), files = {};
+    await asrCall({ type: 'load', model }, p => {
+      if (p && p.file && p.total) { files[p.file] = [p.loaded || 0, p.total]; let l = 0, t = 0; for (const f in files) { l += files[f][0]; t += files[f][1]; } setAuState(a.id, '下載辨識模型 ' + Math.min(99, Math.round(l / t * 100)) + '%…'); }
+    });
+    localStorage.setItem(seenKey, '1');
+    const lang = ({ 'zh-TW': 'chinese', 'en-US': 'english', 'ja-JP': 'japanese' })[LANGS[langI][0]] || 'chinese', parts = [];
+    for (let i = 0; i < chunks.length; i++) {
+      if (asrCancel) throw new Error('已取消');
+      setAuState(a.id, '轉文字中 ' + (i + 1) + ' / ' + chunks.length + '…(請保持畫面開啟)');
+      if (rmsOf(chunks[i]) < 0.004) continue; // 幾乎靜音,跳過避免產生亂碼
+      const r = await asrCall({ type: 'run', id: i, audio: chunks[i], lang });
+      const t = (r.text || '').trim(); if (t) parts.push(t);
+    }
+    let text = parts.join('\n');
+    if (lang === 'chinese') text = await toTrad(text);
+    if (!text) throw new Error('沒有辨識到內容(錄音可能太小聲或沒有人聲)');
+    a.text = text; note.updatedAt = Date.now(); persist(); openTx.add(a.id);
+    if (auto && typeOf(note) === 'text' && !note.lock) insertTranscript(note, a);
+    toast('轉文字完成' + (auto && typeOf(note) === 'text' ? ',已加到筆記最後' : '')); autoSync();
+  } catch (e) { console.error(e); const m = e.message || '未知錯誤'; toast('轉文字失敗:' + (/fetch|network|load failed/i.test(m) ? '無法下載辨識模型,請確認網路後再試' : m)); }
+  finally { asrBusy = false; auState.delete(a.id); if (cur === note) renderAudio(); }
+}
+
 let rec = null;
 async function recToggle() {
   if (rec) { rec.mr.stop(); return; }
@@ -2106,7 +2209,8 @@ async function recToggle() {
     btn.classList.remove('rec'); btn.textContent = '🎙️ 錄音'; rec = null;
     const blob = new Blob(chunks, { type: mr.mimeType || mt || 'audio/mp4' });
     if (blob.size < 800) { toast('錄音太短,沒有儲存'); return; }
-    await auAdd(note, blob, null, (Date.now() - t0) / 1000);
+    const a = await auAdd(note, blob, null, (Date.now() - t0) / 1000);
+    if (a && localStorage.getItem('cloudnotes.asrauto') !== '0') auTranscribe(note, a, true);
   };
   mr.start(1000); rec = { mr }; btn.classList.add('rec'); btn.textContent = '⏹ 停止 0:00'; toast('錄音中…(請不要切換到其他 App)');
 }
@@ -2227,9 +2331,9 @@ $('#updBtn').onclick = async () => {
   try { for (const k of await caches.keys()) await caches.delete(k); } catch (e) {}
   location.href = location.pathname + '?v=' + Date.now();
 };
-$('#setBtn').onclick = () => { $('#cid').value = cid(); $('#dlg').showModal(); showStorage(); showVer(); $('#gdInfo').textContent = ''; if (GD.ready()) gdUsage(false); };
+$('#setBtn').onclick = () => { $('#cid').value = cid(); $('#dlg').showModal(); showStorage(); showVer(); $('#asrSel').value = asrKey(); $('#asrAuto').checked = localStorage.getItem('cloudnotes.asrauto') !== '0'; $('#gdInfo').textContent = ''; if (GD.ready()) gdUsage(false); };
 $('#cancel').onclick = () => $('#dlg').close();
-$('#save').onclick = () => { localStorage.setItem(CID_KEY, $('#cid').value.trim()); token = null; $('#dlg').close(); setStatus('設定已儲存,點 ☁️ 開始同步'); };
+$('#save').onclick = () => { localStorage.setItem('cloudnotes.asr', $('#asrSel').value); localStorage.setItem('cloudnotes.asrauto', $('#asrAuto').checked ? '1' : '0'); localStorage.setItem(CID_KEY, $('#cid').value.trim()); token = null; $('#dlg').close(); setStatus('設定已儲存,點 ☁️ 開始同步'); };
 $('#exportBtn').onclick = () => {
   const blob = new Blob([JSON.stringify({ notes: notes.filter(n => !n.deleted) }, null, 2)], { type: 'application/json' });
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'notes-backup.json'; a.click();
