@@ -1,4 +1,4 @@
-const CACHE = 'cloudnotes-v31';
+const CACHE = 'cloudnotes-v32';
 const ASSETS = ['./', './index.html', './manifest.webmanifest', './icon.svg', './icon-192.png', './icon-512.png', './lib/pdf.min.js', './lib/pdf.worker.min.js'];
 
 self.addEventListener('install', e => {
