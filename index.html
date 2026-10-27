@@ -373,10 +373,16 @@ dialog .row{display:flex;gap:8px;justify-content:flex-end;margin-top:16px;flex-w
 </dialog>
 
 <dialog id="dlg">
-  <h2>Google Drive 同步設定</h2>
+  <h2>同步設定</h2>
   <label for="cid">OAuth 用戶端 ID</label>
   <input id="cid" placeholder="xxxxxxxx.apps.googleusercontent.com" autocomplete="off">
   <div class="hint">到 Google Cloud Console 建立「網頁應用程式」類型的 OAuth 用戶端 ID,並把本 App 網址加入「已授權的 JavaScript 來源」。筆記會存成你雲端硬碟中的 notes-sync.json,App 只能存取它自己建立的檔案。</div>
+  <label for="ghRepo">GitHub 同步(選用)</label>
+  <input id="ghRepo" placeholder="帳號/私人儲存庫,例如 ts701105-cell/my-notes" autocomplete="off">
+  <input id="ghTok" type="password" placeholder="存取金鑰 github_pat_…" autocomplete="off" style="margin-top:6px">
+  <div class="hint">只同步筆記文字與標注,PDF 原檔和錄音仍由 Google Drive 保存。每次同步都會覆蓋 GitHub 上的歷史,不保留舊版本。<br>設定方式:① 在 GitHub 建立<b>私人(Private)</b>儲存庫,建立時勾選「Add a README」。② 到 Settings → Developer settings → Fine-grained tokens 產生金鑰:只選這個儲存庫,權限 Contents 設為 Read and write。③ 把儲存庫名稱和金鑰貼在上面。金鑰只存在這台裝置,每支手機或電腦都要各自填一次。清空儲存庫欄位再按儲存,就會停用。</div>
+  <button class="btn" id="ghTest" type="button">測試 GitHub 連線</button>
+  <div class="hint" id="ghInfo"></div>
   <label for="asrSel">錄音轉文字(在這台裝置上辨識,錄音不會上傳)</label>
   <select id="asrSel"><option value="tiny">快速(約 40 MB,準確度較低)</option><option value="base">標準(約 80 MB)</option><option value="small">較準確(約 250 MB,較慢)</option></select>
   <label style="display:flex;gap:8px;align-items:center;margin-top:6px"><input type="checkbox" id="asrAuto" style="width:auto"> 錄音結束後自動轉文字</label>
@@ -1744,7 +1750,59 @@ const GD = {
   async getPdf(P) { return pdfFromDrive(P); },
   del(P) { if (P.fid && this.ready()) fetch('https://www.googleapis.com/drive/v3/files/' + P.fid, { method: 'DELETE', headers: { Authorization: 'Bearer ' + token } }).catch(() => {}); }
 };
-const PROVS = [GD];
+/* ---------- GitHub 同步(只存筆記文字與標注,每次覆蓋歷史、不保留舊版本)---------- */
+const GH_KEY = 'cloudnotes.gh';
+const ghCfg = () => { try { const c = JSON.parse(localStorage.getItem(GH_KEY) || 'null'); return c && c.repo && c.token ? c : null; } catch (e) { return null; } };
+let ghBranch = 'main', ghHead = null, ghRemoteStr = null;
+function utf8b64(str) { const u = new TextEncoder().encode(str); let s = ''; for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); return btoa(s); }
+async function ghApi(path, opts = {}, allow = []) {
+  const c = ghCfg(); if (!c) throw new Error('尚未設定 GitHub');
+  const r = await fetch('https://api.github.com/repos/' + c.repo + path, { ...opts, headers: { Authorization: 'Bearer ' + c.token, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', ...(opts.headers || {}) } });
+  if (r.ok || allow.includes(r.status)) return r;
+  if (r.status === 401) throw new Error('GitHub 金鑰無效或已過期');
+  if (r.status === 403) throw new Error('GitHub 拒絕存取(權限不足或請求太頻繁)');
+  if (r.status === 404) throw new Error('找不到儲存庫,或金鑰沒有這個儲存庫的權限');
+  throw new Error('GitHub 錯誤 ' + r.status);
+}
+const GH = {
+  name: 'GitHub', noFiles: true,
+  configured: () => !!ghCfg(),
+  ready: () => !!ghCfg() && navigator.onLine !== false,
+  async auth() {
+    const i = await (await ghApi('')).json();
+    if (!i.private) throw new Error('這個儲存庫是公開的,為了保護筆記已停止同步,請改用私人儲存庫');
+    if (i.permissions && !i.permissions.push) throw new Error('金鑰沒有寫入權限(需要 Contents: Read and write)');
+    ghBranch = i.default_branch || 'main';
+    return i;
+  },
+  async read() {
+    ghHead = null; ghRemoteStr = null;
+    const rf = await ghApi('/git/ref/heads/' + ghBranch, {}, [404, 409]);
+    if (!rf.ok) return {};
+    ghHead = (await rf.json()).object.sha;
+    const r = await ghApi('/contents/' + FILE + '?ref=' + ghHead, { headers: { Accept: 'application/vnd.github.raw+json' } }, [404]);
+    if (!r.ok) return {};
+    ghRemoteStr = await r.text();
+    try { return JSON.parse(ghRemoteStr); } catch (e) { return {}; }
+  },
+  async write(body) {
+    if (body === ghRemoteStr) return;
+    const rf = await ghApi('/git/ref/heads/' + ghBranch, {}, [404, 409]);
+    const now = rf.ok ? (await rf.json()).object.sha : null;
+    if (now !== ghHead) { const e = new Error('另一台裝置剛更新'); e.race = true; throw e; }
+    const J = { 'Content-Type': 'application/json' }, post = (p, o, m) => ghApi(p, { method: m || 'POST', headers: J, body: JSON.stringify(o) });
+    if (!now) { await post('/contents/' + FILE, { message: 'sync', content: utf8b64(body) }, 'PUT'); return; }
+    const bl = await (await post('/git/blobs', { content: utf8b64(body), encoding: 'base64' })).json();
+    const tr = await (await post('/git/trees', { tree: [{ path: FILE, mode: '100644', type: 'blob', sha: bl.sha }] })).json();
+    const cm = await (await post('/git/commits', { message: 'sync ' + new Date().toISOString(), tree: tr.sha, parents: [] })).json();
+    const rf2 = await ghApi('/git/ref/heads/' + ghBranch);
+    if ((await rf2.json()).object.sha !== ghHead) { const e = new Error('另一台裝置剛更新'); e.race = true; throw e; }
+    await post('/git/refs/heads/' + ghBranch, { sha: cm.sha, force: true }, 'PATCH');
+    ghHead = cm.sha; ghRemoteStr = body;
+  },
+  has: () => false, async putPdf() {}, async getPdf() { return null; }, del() {}
+};
+const PROVS = [GD, GH];
 async function syncWith(pv, interactive) {
   await pv.auth(interactive);
   const j = await pv.read(), remote = j.notes || [], remoteNbs = j.notebooks || [];
@@ -1756,14 +1814,14 @@ async function syncWith(pv, interactive) {
   nbs = merge(nbs, remoteNbs).filter(x => !(x.deleted && x.updatedAt < cutoff)); saveNbs();
   if (openId) cur = notes.find(n => n.id === openId) || cur;
   persist(); render();
-  for (const n of notes) {
+  if (!pv.noFiles) for (const n of notes) {
     const P = n.pdf;
     if (n.deleted || !P || !P.v || pv.has(P)) continue;
     const bl = await pdfDB.get(P.key).catch(() => null); if (!bl) continue;
     try { setStatus('上傳 PDF 到 ' + pv.name + '「' + (n.title || P.name || '').slice(0, 10) + '」…'); await pv.putPdf(P, bl); n.updatedAt = Date.now(); persist(); }
     catch (e) { console.warn('pdf upload failed', e); }
   }
-  for (const n of notes) {
+  if (!pv.noFiles) for (const n of notes) {
     if (n.deleted || !n.audio) continue;
     for (const a of n.audio) {
       if (a.fid) continue;
@@ -1781,9 +1839,12 @@ async function sync(interactive) {
   const ok = [], bad = [];
   try {
     for (const pv of PROVS) {
-      const want = (interactive && !!cid()) || pv.configured();
-      if (!want) continue;
-      try { await syncWith(pv, !token); ok.push(pv.name); }
+      const want = pv.configured() || (interactive && pv === GD && !!cid() && !GH.configured());
+      if (!want || (!interactive && !pv.ready())) continue;
+      try {
+        try { await syncWith(pv, !token); } catch (e) { if (e.race) await syncWith(pv, false); else throw e; }
+        ok.push(pv.name);
+      }
       catch (e) { bad.push(pv.name + ':' + (e.message || '失敗')); }
     }
     const t = new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' });
@@ -2331,9 +2392,25 @@ $('#updBtn').onclick = async () => {
   try { for (const k of await caches.keys()) await caches.delete(k); } catch (e) {}
   location.href = location.pathname + '?v=' + Date.now();
 };
-$('#setBtn').onclick = () => { $('#cid').value = cid(); $('#dlg').showModal(); showStorage(); showVer(); $('#asrSel').value = asrKey(); $('#asrAuto').checked = localStorage.getItem('cloudnotes.asrauto') !== '0'; $('#gdInfo').textContent = ''; if (GD.ready()) gdUsage(false); };
+$('#setBtn').onclick = () => { $('#cid').value = cid(); const gc = ghCfg(); $('#ghRepo').value = gc ? gc.repo : ''; $('#ghTok').value = ''; $('#ghTok').placeholder = gc ? '已儲存(留空表示不變)' : '存取金鑰 github_pat_…'; $('#ghInfo').textContent = ''; $('#dlg').showModal(); showStorage(); showVer(); $('#asrSel').value = asrKey(); $('#asrAuto').checked = localStorage.getItem('cloudnotes.asrauto') !== '0'; $('#gdInfo').textContent = ''; if (GD.ready()) gdUsage(false); };
+function ghSave() {
+  let repo = $('#ghRepo').value.trim().replace(/^https?:\/\/github\.com\//i, '').replace(/\.git$/i, '').replace(/\/+$/, ''), tk = $('#ghTok').value.trim();
+  const old = ghCfg();
+  if (!repo) { localStorage.removeItem(GH_KEY); return true; }
+  if (!/^[\w.-]+\/[\w.-]+$/.test(repo)) { $('#ghInfo').textContent = '儲存庫格式要是「帳號/名稱」'; return false; }
+  tk = tk || (old && old.token) || '';
+  if (!tk) { $('#ghInfo').textContent = '請貼上存取金鑰'; return false; }
+  localStorage.setItem(GH_KEY, JSON.stringify({ repo, token: tk })); ghHead = null; return true;
+}
+$('#ghTest').onclick = async () => {
+  const info = $('#ghInfo'); if (!ghSave()) return;
+  if (!ghCfg()) { info.textContent = '請先填入儲存庫與金鑰'; return; }
+  info.textContent = '連線中…';
+  try { const i = await GH.auth(); info.textContent = '連線成功:私人儲存庫 ' + i.full_name + ',分支 ' + ghBranch + '。按儲存後點 ☁️ 開始同步。'; $('#ghTok').value = ''; $('#ghTok').placeholder = '已儲存(留空表示不變)'; }
+  catch (e) { info.textContent = '失敗:' + (e.message || '請檢查儲存庫名稱與金鑰'); }
+};
 $('#cancel').onclick = () => $('#dlg').close();
-$('#save').onclick = () => { localStorage.setItem('cloudnotes.asr', $('#asrSel').value); localStorage.setItem('cloudnotes.asrauto', $('#asrAuto').checked ? '1' : '0'); localStorage.setItem(CID_KEY, $('#cid').value.trim()); token = null; $('#dlg').close(); setStatus('設定已儲存,點 ☁️ 開始同步'); };
+$('#save').onclick = () => { localStorage.setItem('cloudnotes.asr', $('#asrSel').value); localStorage.setItem('cloudnotes.asrauto', $('#asrAuto').checked ? '1' : '0'); localStorage.setItem(CID_KEY, $('#cid').value.trim()); token = null; if (!ghSave()) return; $('#dlg').close(); setStatus('設定已儲存,點 ☁️ 開始同步'); };
 $('#exportBtn').onclick = () => {
   const blob = new Blob([JSON.stringify({ notes: notes.filter(n => !n.deleted) }, null, 2)], { type: 'application/json' });
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'notes-backup.json'; a.click();
