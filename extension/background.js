@@ -262,10 +262,11 @@ async function pullAll(urls) {
 }
 
 /* ---------- 主流程 ---------- */
-async function clip({ kind, tabId, tags = [], note = '' }) {
+async function clip({ kind, tabId, tags = [], note = '', nb, nbName }) {
+  if (!nb && !nbName) { const { nbSel } = await chrome.storage.local.get('nbSel'); if (nbSel) { nb = nbSel.id; nbName = nbSel.name; } }
   const tab = await chrome.tabs.get(tabId);
   if (!/^https?:/i.test(tab.url || '')) throw new Error('這個頁面(如 chrome:// 或商店頁)無法剪輯');
-  const c = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7), title: tab.title || '', url: tab.url, tags: tags.slice(0, 8), note, ts: Date.now() };
+  const c = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7), title: tab.title || '', url: tab.url, tags: tags.slice(0, 8), note, nb: nb || undefined, nbName: nbName || undefined, ts: Date.now() };
   let info = {};
   if (kind === 'simple') kind = 'article';
   if (kind === 'article') {

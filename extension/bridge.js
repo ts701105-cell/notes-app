@@ -10,6 +10,7 @@ window.addEventListener('message', e => {
   const d = e.data;
   if (e.source !== window || !d || d.src !== 'cloudnotes-app') return;
   if (d.type === 'ready') flush();
+  if (d.type === 'nbs' && Array.isArray(d.list)) { try { chrome.storage.local.set({ nbs: d.list.slice(0, 200).map(x => ({ id: String(x.id), name: String(x.name).slice(0, 60) })) }); } catch (x) {} }
   if (d.type === 'ack' && typeof d.id === 'string') { try { chrome.runtime.sendMessage({ type: 'ack', id: d.id }); } catch (x) {} }
 });
 try { chrome.storage.onChanged.addListener(ch => { if (ch.queue) flush(); }); } catch (e) {}

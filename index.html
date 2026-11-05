@@ -1505,7 +1505,8 @@ sv.addEventListener('pointercancel', mEnd);
 sv.addEventListener('wheel', e => { if (!M) return; e.preventDefault(); zoomAt(e.clientX, e.clientY, M.v.k * (e.deltaY < 0 ? 1.1 : 1 / 1.1)); }, { passive: false });
 
 /* ---------- 記事本與標籤 ---------- */
-const saveNbs = () => { try { localStorage.setItem('cloudnotes.nbs', JSON.stringify(nbs)); } catch (e) {} };
+const postNbs = () => { try { window.postMessage({ src: 'cloudnotes-app', type: 'nbs', list: nbs.filter(x => !x.deleted).sort((a, b) => (a.o || 0) - (b.o || 0)).map(x => ({ id: x.id, name: x.name })) }, location.origin); } catch (e) {} };
+const saveNbs = () => { try { localStorage.setItem('cloudnotes.nbs', JSON.stringify(nbs)); } catch (e) {} postNbs(); };
 const liveNbs = () => nbs.filter(x => !x.deleted).sort((a, b) => (a.o || 0) - (b.o || 0));
 function nbOf(n) { return n && n.nb ? nbs.find(x => x.id === n.nb && !x.deleted) || null : null; }
 const nbName = n => { const b = nbOf(n); return b ? b.name : '未分類'; };
@@ -2376,7 +2377,8 @@ function importClip(c) {
   if (!c || typeof c.id !== 'string') throw new Error('bad clip');
   let seen = []; try { seen = JSON.parse(localStorage.getItem('cloudnotes.clips') || '[]'); } catch (e) {}
   if (seen.includes(c.id)) return;
-  const nb = createNb('網頁剪輯');
+  let nb = c.nb === 'none' ? { id: '', name: '未分類' } : liveNbs().find(x => x.id === c.nb);
+  if (!nb) { const nm = typeof c.nbName === 'string' ? c.nbName.trim().slice(0, 40) : ''; nb = createNb(nm || '網頁剪輯'); }
   const url = typeof c.url === 'string' && /^https?:\/\//i.test(c.url) ? c.url.slice(0, 2000) : '';
   const n = { id: uid(), type: 'text', title: String(c.title || url || '網頁剪輯').slice(0, 200), body: '', tags: ['網頁剪輯'], nb: nb.id, src: url, created: Date.now(), updatedAt: Date.now(), deleted: false };
   for (const t of Array.isArray(c.tags) ? c.tags : []) { const v = String(t).trim().replace(/^[#＃]+/, '').slice(0, 20); if (v && n.tags.length < 10 && !n.tags.some(x => x.toLowerCase() === v.toLowerCase())) n.tags.push(v); }
@@ -2397,7 +2399,7 @@ function importClip(c) {
   }
   notes.push(n);
   seen.unshift(c.id); try { localStorage.setItem('cloudnotes.clips', JSON.stringify(seen.slice(0, 200))); } catch (e) {}
-  persist(); render(); toast('已從網頁剪輯一則筆記到「網頁剪輯」記事本');
+  persist(); render(); toast('已從網頁剪輯一則筆記到「' + nb.name + '」');
 }
 function initClips() {
   if (clipsInit) return; clipsInit = true;
@@ -2407,7 +2409,7 @@ function initClips() {
     try { importClip(d.clip); } catch (x) { console.warn('clip rejected', x); }
     if (d.clip && typeof d.clip.id === 'string') window.postMessage({ src: 'cloudnotes-app', type: 'ack', id: d.clip.id }, location.origin);
   });
-  window.postMessage({ src: 'cloudnotes-app', type: 'ready' }, location.origin);
+  window.postMessage({ src: 'cloudnotes-app', type: 'ready' }, location.origin); postNbs();
 }
 async function bootApp() {
   let v;
