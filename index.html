@@ -83,14 +83,14 @@ main#list{flex:1;overflow-y:auto;padding-bottom:90px}
 .ttl{flex:1;min-width:0;border:0;background:none;color:var(--text);font:inherit;font-size:20px;font-weight:650;padding:8px;outline:none}
 .escroll{flex:1;overflow-y:auto;padding:0 clamp(16px,4vw,56px);overscroll-behavior:contain}
 #etitle{width:100%;border:0;background:none;color:var(--text);font:inherit;font-size:26px;font-weight:700;padding:16px 0 6px;outline:none}
-#ebody{min-height:55%;outline:none;font-size:16px;line-height:1.7;padding:6px 0 80px;word-break:break-word}
+#ebody{min-height:55%;outline:none;font-size:calc(16px * var(--tz,1));line-height:1.7;padding:6px 0 80px;word-break:break-word}
 #ebody.blank::before{content:attr(data-ph);color:var(--sub);pointer-events:none}
-#ebody h1{font-size:24px;margin:.7em 0 .3em}
-#ebody h2{font-size:20px;margin:.7em 0 .3em}
-#ebody h3{font-size:17px;margin:.7em 0 .3em}
+#ebody h1{font-size:calc(24px * var(--tz,1));margin:.7em 0 .3em}
+#ebody h2{font-size:calc(20px * var(--tz,1));margin:.7em 0 .3em}
+#ebody h3{font-size:calc(17px * var(--tz,1));margin:.7em 0 .3em}
 #ebody ul,#ebody ol{padding-left:26px;margin:.3em 0}
 #ebody blockquote{margin:8px 0;padding:2px 14px;border-left:3px solid var(--accent);color:var(--sub)}
-#ebody pre{background:var(--bg);padding:10px 12px;border-radius:8px;overflow-x:auto;white-space:pre-wrap;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:14px}
+#ebody pre{background:var(--bg);padding:10px 12px;border-radius:8px;overflow-x:auto;white-space:pre-wrap;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:calc(14px * var(--tz,1))}
 #ebody img{max-width:100%;height:auto;border-radius:4px}
 #ebody a{color:var(--accent)}
 #ebody hr{border:0;border-top:1px solid var(--line);margin:14px 0}
@@ -112,7 +112,10 @@ main#list{flex:1;overflow-y:auto;padding-bottom:90px}
 .fmt .sep{height:18px;margin:0 4px}
 #inkWrap{flex:1;overflow-y:auto;overflow-x:hidden;background:#d9dce1;overscroll-behavior:contain}
 #pgNav{display:none;align-items:center;gap:4px;padding:2px 10px;background:var(--card);border-bottom:1px solid var(--line);overflow-x:auto;flex:none;scrollbar-width:none}
-#inkEd.pdfm #pgNav{display:flex}
+#inkEd #pgNav{display:flex}
+#inkEd:not(.pdfm) #pgNav>:not(.zc){display:none}
+#inkEd:not(.pdfm) #pgNav{justify-content:flex-end}
+#fmtBar .tzt{font-size:12px;min-width:38px;text-align:center;color:var(--sub);flex:none}
 #pgNav .ib{width:36px;height:36px;flex:none}
 #pgNav .tb{flex:none}
 #zTxt{font-size:13px;color:var(--sub);min-width:40px;text-align:center}
@@ -273,6 +276,8 @@ dialog .row{display:flex;gap:8px;justify-content:flex-end;margin-top:16px;flex-w
         <button data-c="ul" title="項目符號">•≡</button><button data-c="ol" title="編號清單">1.</button><button data-c="todo" title="待辦清單">☑</button><button data-c="quote" title="引用">❝</button><button data-c="hr" title="分隔線">―</button>
         <span class="sep"></span>
         <button data-c="link" title="連結">🔗</button><button data-c="img" title="插入圖片">🖼️</button><button data-c="clear" title="清除格式">Tx</button>
+        <span class="sep"></span>
+        <button id="tzOut" title="縮小文字" aria-label="縮小文字">A－</button><span class="tzt" id="tzTxt">100%</span><button id="tzIn" title="放大文字" aria-label="放大文字">A＋</button>
       </div>
       <input type="file" id="eImgFile" accept="image/*" multiple hidden>
       <div class="escroll">
@@ -293,7 +298,7 @@ dialog .row{display:flex;gap:8px;justify-content:flex-end;margin-top:16px;flex-w
         <button class="ib" data-pin aria-label="置頂" title="置頂">📌</button>
         <button class="ib" data-del aria-label="刪除" title="移到垃圾桶">🗑️</button>
       </div>
-      <div id="pgNav"><button class="ib" id="pgPrev" aria-label="上一頁">‹</button><button class="tb" id="pgNum">1 / 1</button><button class="ib" id="pgNext" aria-label="下一頁">›</button><button class="tb" id="pgRelink" hidden>📎 取得 PDF 檔</button><span class="sep"></span><button class="ib" id="zOut" aria-label="縮小">－</button><span id="zTxt">100%</span><button class="ib" id="zIn" aria-label="放大">＋</button></div>
+      <div id="pgNav"><button class="ib" id="pgPrev" aria-label="上一頁">‹</button><button class="tb" id="pgNum">1 / 1</button><button class="ib" id="pgNext" aria-label="下一頁">›</button><button class="tb" id="pgRelink" hidden>📎 取得 PDF 檔</button><span class="sep"></span><button class="ib zc" id="zOut" aria-label="縮小">－</button><span id="zTxt" class="zc">100%</span><button class="ib zc" id="zIn" aria-label="放大">＋</button></div>
       <div id="inkWrap"><canvas id="cv"></canvas></div>
       <div class="tools" id="inkTools">
         <button class="tb" id="imgSm" hidden>圖－</button>
@@ -1110,8 +1115,30 @@ $('#pgNum').onclick = async () => {
   const v = await askText('跳到第幾頁?(1–' + N + ')', String(cur.pdf.i + 1));
   const j = parseInt(v, 10); if (j >= 1 && j <= N) pdfSwitch(j - 1);
 };
-const setZoom = z => { zoom = Math.max(1, Math.min(4, z)); sizeCanvas(); };
+const setZoom = (z, cx, cy) => {
+  const wr = $('#inkWrap'), r = wr.getBoundingClientRect(), ow = cv.clientWidth || 1, oh = cv.clientHeight || 1;
+  if (cx == null) { cx = r.left + r.width / 2; cy = r.top + r.height / 2; }
+  const ux = (wr.scrollLeft + cx - r.left) / ow, uy = (wr.scrollTop + cy - r.top) / oh;
+  zoom = Math.max(1, Math.min(4, Math.round(z * 100) / 100)); sizeCanvas();
+  wr.scrollLeft = ux * cv.clientWidth - (cx - r.left); wr.scrollTop = uy * cv.clientHeight - (cy - r.top);
+};
 $('#zIn').onclick = () => setZoom(zoom + .5);
+let tz = 1; try { tz = Math.min(2.5, Math.max(.6, +localStorage.getItem('cloudnotes.tz') || 1)); } catch (e) {}
+function setTz(v) {
+  tz = Math.min(2.5, Math.max(.6, Math.round(v * 100) / 100));
+  document.documentElement.style.setProperty('--tz', tz); $('#tzTxt').textContent = Math.round(tz * 100) + '%';
+  try { localStorage.setItem('cloudnotes.tz', String(tz)); } catch (e) {}
+}
+setTz(tz);
+$('#tzIn').onclick = () => setTz(tz + .1); $('#tzOut').onclick = () => setTz(tz - .1);
+$('#tzTxt').onclick = () => setTz(1);
+$('#editor .escroll').addEventListener('wheel', e => { if (!e.ctrlKey) return; e.preventDefault(); setTz(tz * (e.deltaY < 0 ? 1.06 : 1 / 1.06)); }, { passive: false });
+{ let t0 = null;
+  const dist = e => Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY) || 1;
+  const sc = $('#editor .escroll');
+  sc.addEventListener('touchstart', e => { t0 = e.touches.length === 2 ? { d: dist(e), z: tz } : null; }, { passive: true });
+  sc.addEventListener('touchmove', e => { if (!t0 || e.touches.length !== 2) return; e.preventDefault(); setTz(t0.z * dist(e) / t0.d); }, { passive: false });
+  sc.addEventListener('touchend', () => { t0 = null; }, { passive: true }); }
 $('#zOut').onclick = () => setZoom(zoom - .5);
 $('#pdfFile').onchange = async e => { const f = e.target.files[0]; e.target.value = ''; if (f) await importPdf(f); };
 $('#pgRelink').onclick = async () => {
@@ -1322,7 +1349,7 @@ cv.addEventListener('pointermove', () => {
 function endG2() {
   if (!g2) return; const g = g2; g2 = null;
   const dy = g.y1 - g.y0, dx = g.x1 - g.x0, e = edgeInfo();
-  if (Math.abs(dy) < 70 || Math.abs(dy) < Math.abs(dx) * 1.5 || !cur || !cur.pdf) return;
+  if (g.pinched || Math.abs(dy) < 70 || Math.abs(dy) < Math.abs(dx) * 1.5 || !cur || !cur.pdf) return;
   const N = pgCount(cur.pdf), i = cur.pdf.i;
   if (dy < 0 && g.bot && e.bot) { if (i >= N - 1) toast('已經是最後一頁'); else { pdfSwitch(i + 1); toast('第 ' + (i + 2) + ' / ' + N + ' 頁'); } }
   else if (dy > 0 && g.top && e.top) { if (i <= 0) toast('已經是第一頁'); else { pgGoBottom = true; pdfSwitch(i - 1); toast('第 ' + i + ' / ' + N + ' 頁'); } }
@@ -1336,6 +1363,20 @@ addEventListener('keydown', e => {
   if (k === 'PageDown' || k === 'ArrowRight') { e.preventDefault(); pdfSwitch(cur.pdf.i + 1); }
   else if (k === 'PageUp' || k === 'ArrowLeft') { e.preventDefault(); pdfSwitch(cur.pdf.i - 1); }
 });
+/* 兩指捏合縮放 / 電腦 Ctrl+滾輪縮放 */
+let pz = null;
+const pzDist = f => Math.hypot(f[0].x - f[1].x, f[0].y - f[1].y) || 1;
+cv.addEventListener('pointerdown', () => { const f = fingers2(); if (f.length === 2) pz = { d0: pzDist(f), z0: zoom, on: false }; });
+cv.addEventListener('pointermove', () => {
+  if (!pz) return; const f = fingers2(); if (f.length !== 2) return;
+  const k = pzDist(f) / pz.d0;
+  if (!pz.on && Math.abs(k - 1) < .12) return;
+  pz.on = true; if (g2) g2.pinched = true;
+  setZoom(pz.z0 * k, (f[0].x + f[1].x) / 2, (f[0].y + f[1].y) / 2);
+});
+const endPz = () => { if (pz && fingers2().length < 2) pz = null; };
+cv.addEventListener('pointerup', endPz); cv.addEventListener('pointercancel', endPz);
+$('#inkWrap').addEventListener('wheel', e => { if (!e.ctrlKey) return; e.preventDefault(); setZoom(zoom * (e.deltaY < 0 ? 1.1 : 1 / 1.1), e.clientX, e.clientY); }, { passive: false });
 cv.addEventListener('contextmenu', e => e.preventDefault());
 
 function undo() {
