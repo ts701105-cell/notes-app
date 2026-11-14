@@ -1023,8 +1023,22 @@ async function pdfFromDrive(P) {
   await pdfDB.put(P.key, bl); return bl;
 }
 const pdfUpload = (P, blob) => driveUpload('cloudnotes-pdf-' + P.key + '.pdf', 'application/pdf', blob);
+/* 雲筆記專用資料夾:新建立的檔案(資料檔、PDF、錄音)都放進這裡;已存在的檔案不會被移動 */
+const GD_FOLDER = '雲筆記';
+let gdFolder = null;
+async function gdFolderId() {
+  if (gdFolder) return gdFolder;
+  try {
+    const q = encodeURIComponent(`name='${GD_FOLDER}' and mimeType='application/vnd.google-apps.folder' and trashed=false`);
+    const f = await (await api(`https://www.googleapis.com/drive/v3/files?q=${q}&orderBy=createdTime&fields=files(id)`)).json();
+    if (f.files && f.files[0]) return gdFolder = f.files[0].id;
+    const r = await api('https://www.googleapis.com/drive/v3/files?fields=id', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: GD_FOLDER, mimeType: 'application/vnd.google-apps.folder' }) });
+    return gdFolder = (await r.json()).id;
+  } catch (e) { console.warn('folder failed', e); return null; }
+}
 async function driveUpload(name, mime, blob) {
-  const bd = 'b' + uid(), meta = JSON.stringify({ name, mimeType: mime });
+  const pid = await gdFolderId();
+  const bd = 'b' + uid(), meta = JSON.stringify({ name, mimeType: mime, ...(pid ? { parents: [pid] } : {}) });
   const body = new Blob([`--${bd}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${meta}\r\n--${bd}\r\nContent-Type: ${mime}\r\n\r\n`, blob, `\r\n--${bd}--`]);
   const r = await api('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', { method: 'POST', headers: { 'Content-Type': 'multipart/related; boundary=' + bd }, body });
   return (await r.json()).id;
@@ -1769,6 +1783,7 @@ const GD = {
   ready: () => !!token && Date.now() < tokenExp - 60000,
   auth: i => getToken(i),
   async read() {
+    gdFolder = null;
     const q = encodeURIComponent(`name='${FILE}' and trashed=false`);
     const found = await (await api(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id)`)).json();
     gdFileId = found.files[0] && found.files[0].id;
@@ -1777,8 +1792,8 @@ const GD = {
   },
   async write(body) {
     if (gdFileId) { await api(`https://www.googleapis.com/upload/drive/v3/files/${gdFileId}?uploadType=media`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body }); return; }
-    const bd = 'b' + uid();
-    const mpart = `--${bd}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify({ name: FILE, mimeType: 'application/json' })}\r\n--${bd}\r\nContent-Type: application/json\r\n\r\n${body}\r\n--${bd}--`;
+    const bd = 'b' + uid(), pid = await gdFolderId();
+    const mpart = `--${bd}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify({ name: FILE, mimeType: 'application/json', ...(pid ? { parents: [pid] } : {}) })}\r\n--${bd}\r\nContent-Type: application/json\r\n\r\n${body}\r\n--${bd}--`;
     await api('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', { method: 'POST', headers: { 'Content-Type': 'multipart/related; boundary=' + bd }, body: mpart });
   },
   has: P => !!P.fid,
