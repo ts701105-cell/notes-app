@@ -1805,6 +1805,7 @@ const PROVS = [GD];
 async function syncWith(pv, interactive) {
   await pv.auth(interactive);
   const j = await pv.read(), remote = j.notes || [], remoteNbs = j.notebooks || [];
+  if (pv === GD) await gdFolderId();
   commit();
   const openId = cur && cur.id;
   notes = merge(notes, remote);
