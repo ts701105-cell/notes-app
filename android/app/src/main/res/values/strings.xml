@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="app_name">雲筆記</string>
+  <string name="launch_url">https://ts701105-cell.github.io/notes-app/index.html</string>
+  <string name="asset_statements">[{\"relation\": [\"delegate_permission/common.handle_all_urls\"], \"target\": {\"namespace\": \"web\", \"site\": \"https://ts701105-cell.github.io\"}}]</string>
+</resources>

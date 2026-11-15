@@ -1,0 +1,8 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "com.ts701105.cloudnotes",
+    "sha256_cert_fingerprints": ["A3:FB:98:25:73:0B:2E:E2:2C:B2:1C:69:C3:D1:46:82:65:F0:F1:94:59:7E:2C:9E:D2:6E:F1:82:25:4E:4E:D7"]
+  }
+}]

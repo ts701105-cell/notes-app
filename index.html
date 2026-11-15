@@ -120,7 +120,24 @@ main#list{flex:1;overflow-y:auto;padding-bottom:90px}
 #pgNav .tb{flex:none}
 #zTxt{font-size:13px;color:var(--sub);min-width:40px;text-align:center}
 body.fs-ink #pgNav{padding-right:150px}
-#inkEd.pdfm #moreBtn,#inkEd.pdfm #bgBtn{display:none}
+#inkEd.pdfm #moreBtn,#inkEd.pdfm #bgBtn,#inkEd.pdfm #stkBtn{display:none}
+.tpg{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:8px;max-height:52vh;overflow-y:auto;margin-top:6px}
+.tpi{position:relative;border:2px solid var(--line);border-radius:10px;background:#fff;padding:0;overflow:hidden;cursor:pointer;color:#262626}
+.tpi.on{border-color:var(--accent)}
+.tpi img,.tpi canvas{display:block;width:100%;aspect-ratio:1/1.1;object-fit:cover}
+.tpi span{display:block;font-size:12px;padding:3px 2px;background:var(--card);color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tpi .x{position:absolute;top:2px;right:2px;width:24px;height:24px;border-radius:12px;background:rgba(0,0,0,.55);color:#fff;font-size:13px;line-height:24px;text-align:center}
+.tpi .x.dl{right:30px}
+.stg{display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));gap:6px;max-height:46vh;overflow-y:auto;margin-top:8px}
+.stg .tpi img{aspect-ratio:1/1;object-fit:contain;padding:4px;box-sizing:border-box}
+.tabs{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none}
+.tabs button{flex:none;padding:6px 10px;border-radius:16px;border:1px solid var(--line);background:var(--bg);color:var(--text);font:inherit;font-size:13px}
+.tabs button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+#txInp{width:100%;min-height:90px;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--text);font:inherit;font-size:16px;box-sizing:border-box;resize:vertical}
+.txr{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:10px}
+.txr select{border:1px solid var(--line);background:var(--bg);color:var(--text);border-radius:8px;padding:7px 6px;font:inherit;font-size:14px;max-width:150px}
+.txr .tb.on{background:var(--sel);color:var(--accent)}
+#txDots{display:flex;gap:6px;flex-wrap:wrap}
 .dot.wh{box-shadow:inset 0 0 0 1px #b8bcc2}
 #cv{display:block;background:#fff;touch-action:none;margin:0 auto;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
 .tools{display:flex;gap:4px;align-items:center;overflow-x:auto;padding:6px 8px calc(6px + env(safe-area-inset-bottom));border-top:1px solid var(--line);background:var(--bg);scrollbar-width:none}
@@ -304,11 +321,15 @@ dialog .row{display:flex;gap:8px;justify-content:flex-end;margin-top:16px;flex-w
         <button class="tb" id="imgSm" hidden>圖－</button>
         <button class="tb" id="imgBg" hidden>圖＋</button>
         <button class="tb" id="imgDel" hidden>刪圖</button>
+        <button class="tb" id="imgRot" hidden>↻ 旋轉</button>
         <button class="tb" id="imgSave" hidden>⬇ 下載圖</button>
+        <button class="tb" id="lsStk" hidden>⭐ 存成貼紙</button>
+        <button class="tb" id="lsDel" hidden>🗑 刪除選取</button>
         <button class="tb on" data-tool="pen">✏️ 筆</button>
         <button class="tb" data-tool="hl">🖍️ 螢光</button>
         <button class="tb" data-tool="eraser">🧽 橡皮</button>
         <button class="tb" data-tool="text">🔤 文字</button>
+        <button class="tb" data-tool="lasso">➰ 套索</button>
         <button class="tb" data-tool="hand">✋ 移動</button>
         <button class="tb" data-tool="img">🖼️ 移圖</button>
         <span class="sep"></span>
@@ -318,11 +339,13 @@ dialog .row{display:flex;gap:8px;justify-content:flex-end;margin-top:16px;flex-w
         <button class="tb on" data-w="5">中</button>
         <button class="tb" data-w="9">粗</button>
         <button class="tb on" id="prBtn">壓感</button>
+        <button class="tb on" id="slBtn" title="畫線後在結尾停一下,自動變成直線">📏 直線</button>
         <span class="sep"></span>
         <button class="tb" id="imgBtn">＋圖片</button>
+        <button class="tb" id="stkBtn">🏷️ 貼紙</button>
         <input type="file" id="imgFile" accept="image/*" multiple hidden>
         <span class="sep"></span>
-        <button class="tb" id="bgBtn">橫線</button>
+        <button class="tb" id="bgBtn">📄 模版</button>
         <button class="tb" id="moreBtn">＋頁</button>
       </div>
     </section>
@@ -419,6 +442,13 @@ dialog .row{display:flex;gap:8px;justify-content:flex-end;margin-top:16px;flex-w
   <div class="row"><button class="btn p" id="tagClose">完成</button></div>
 </dialog>
 <dialog id="mgDlg"><h2>管理記事本</h2><div id="mgList"></div><div class="row"><button class="btn" id="mgNew">＋ 新增記事本</button><button class="btn p" id="mgClose">完成</button></div></dialog>
+<dialog id="tplDlg"><h2>選擇模版</h2><div class="tpg" id="tplList"></div><div class="row"><button class="btn" id="tplImp">＋ 匯入模版 (PNG / JPG / PDF)</button><button class="btn p" id="tplClose">關閉</button></div><input type="file" id="tplFile" accept="image/png,image/jpeg,image/webp,application/pdf,.pdf" multiple hidden><p style="font-size:12px;color:var(--sub);margin:8px 0 0">自訂模版建議 A5 直式(例如 1748×2480)。可用 Canva、Keynote、PPT 設計後匯出 PNG 或 PDF;PDF 每一頁會變成一個模版。</p></dialog>
+<dialog id="stkDlg"><h2>貼紙</h2><div class="tabs" id="stkTabs"></div><div class="stg" id="stkList"></div><p id="stkHint" style="font-size:12px;color:var(--sub);margin:8px 0 0"></p><div class="row"><button class="btn p" id="stkClose">關閉</button></div></dialog>
+<dialog id="txDlg"><h2 id="txT">文字框</h2><textarea id="txInp" maxlength="500" placeholder="輸入文字"></textarea>
+<div class="txr"><select id="txFont"></select><select id="txSize"></select><button class="tb" id="txB" style="font-weight:700">B</button><button class="tb" id="txI" style="font-style:italic">I</button></div>
+<div class="txr"><span id="txDots"></span></div>
+<div class="txr"><button class="tb" id="txImp">＋ 匯入字型 (TTF / OTF)</button><button class="tb" id="txFDel" hidden>刪除此字型</button></div><input type="file" id="txFile" accept=".ttf,.otf,font/ttf,font/otf" hidden>
+<div class="row"><button class="btn" id="txDel" hidden style="margin-right:auto;color:#d93025">刪除文字</button><button class="btn" id="txNo">取消</button><button class="btn p" id="txOk">確定</button></div></dialog>
 <dialog id="askDlg"><h2 id="askT"></h2><input id="askInp" maxlength="200" autocomplete="off"><div class="row"><button class="btn" id="askNo">取消</button><button class="btn p" id="askOk">確定</button></div></dialog>
 <div id="toast"></div>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -473,7 +503,7 @@ function inkThumb(n) {
   const H = 460; let d = '';
   for (const m of (n.ink && n.ink.imgs) || []) {
     if (m.y < H + 40 && /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+\/=]+$/.test(m.d))
-      d += `<image href="${m.d}" x="${Math.round(m.x)}" y="${Math.round(m.y)}" width="${Math.round(m.w)}" height="${Math.round(m.h)}"/>`;
+      d += `<image href="${m.d}" x="${Math.round(m.x)}" y="${Math.round(m.y)}" width="${Math.round(m.w)}" height="${Math.round(m.h)}"${m.r ? ` transform="rotate(${+m.r || 0} ${Math.round(m.x + m.w / 2)} ${Math.round(m.y + m.h / 2)})"` : ''}/>`;
   }
   for (const s of strokes) {
     if (!s.p || !s.p.length || s.p[0][1] > H + 40 || s.t === 'x') continue;
@@ -883,8 +913,9 @@ $('#dots').style.display = 'contents';
 $('#dots').innerHTML = PALETTE.map((c, i) => `<button class="dot${i ? '' : ' on'}${c === '#ffffff' ? ' wh' : ''}" data-c="${c}" style="background:${c}" aria-label="${c === '#ffffff' ? '白色(遮蓋用)' : '顏色'}"></button>`).join('');
 
 let usePr = localStorage.getItem('cloudnotes.pr') !== '0', imgSel = null, imgDrag = null;
+let lsel = null, lasso = null, lmove = null, tdrag = null, holdT = null, lastTx = {}, smartLine = localStorage.getItem('cloudnotes.sl') !== '0';
 function startInk() {
-  ink = cur.ink; if (!ink.imgs) ink.imgs = []; imgSel = null; imgDrag = null; undoS = []; redoS = []; drawing = null; erasing = null; touches.clear();
+  ink = cur.ink; if (!ink.imgs) ink.imgs = []; lsel = null; lasso = null; lmove = null; tdrag = null; clearTimeout(holdT); imgSel = null; imgDrag = null; undoS = []; redoS = []; drawing = null; erasing = null; touches.clear();
   $('#inkWrap').scrollTop = 0; $('#inkWrap').scrollLeft = 0; zoom = 1; pgBottomFix = false;
   $('#inkEd').classList.toggle('pdfm', !!cur.pdf); pgUI();
   sizeCanvas(); updInkUI();
@@ -912,7 +943,7 @@ const prW = pr => .35 + 1.3 * pr;
 function drawStroke(s, c = ctx) {
   const p = s.p; if (!p || !p.length) return;
   if (s.t === 'x') {
-    c.save(); c.fillStyle = okColor(s.c); c.font = s.w + 'px ' + EX_FONT; c.textBaseline = 'top';
+    c.save(); c.fillStyle = okColor(s.c); c.font = fontOf(s); c.textBaseline = 'top';
     String(s.s || '').split('\n').forEach((l, i) => c.fillText(l, p[0][0], p[0][1] + i * s.w * 1.3));
     c.restore(); return;
   }
@@ -954,20 +985,19 @@ function redraw() {
   if (!ink) return;
   ctx.setTransform(dpr * scale, 0, 0, dpr * scale, 0, 0);
   ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, INK_W, ink.h);
-  if (ink.bg !== 'blank') {
-    ctx.strokeStyle = '#dfe3ea'; ctx.lineWidth = 1.2; ctx.beginPath();
-    const g = ink.bg === 'grid' ? 50 : 56;
-    for (let y = g; y < ink.h; y += g) { ctx.moveTo(0, y); ctx.lineTo(INK_W, y); }
-    if (ink.bg === 'grid') for (let x = g; x < INK_W; x += g) { ctx.moveTo(x, 0); ctx.lineTo(x, ink.h); }
-    ctx.stroke();
-  }
-  for (const m of ink.imgs || []) { const im = getImg(m); if (im.tagName === 'CANVAS' || (im.complete && im.naturalWidth)) ctx.drawImage(im, m.x, m.y, m.w, m.h); }
+  drawBg(ctx, ink, ink.h);
+  for (const m of ink.imgs || []) { const im = getImg(m); if (im.tagName === 'CANVAS' || (im.complete && im.naturalWidth)) drawImgR(ctx, im, m); }
   for (const s of ink.strokes) drawStroke(s);
   if (drawing) drawStroke(drawing);
   if (tool === 'img' && imgSel) {
     const m = (ink.imgs || []).find(x => x.id === imgSel);
-    if (m) { ctx.save(); ctx.strokeStyle = '#2f6fed'; ctx.lineWidth = 3 / scale; ctx.setLineDash([10 / scale, 6 / scale]); ctx.strokeRect(m.x, m.y, m.w, m.h); ctx.restore(); }
+    if (m) { ctx.save(); ctx.translate(m.x + m.w / 2, m.y + m.h / 2); if (m.r) ctx.rotate(m.r * Math.PI / 180); ctx.strokeStyle = '#2f6fed'; ctx.lineWidth = 3 / scale; ctx.setLineDash([10 / scale, 6 / scale]); ctx.strokeRect(-m.w / 2, -m.h / 2, m.w, m.h); ctx.restore(); }
   }
+  drawSelOverlay();
+}
+function drawImgR(g, im, m, x = m.x, y = m.y, w = m.w, h = m.h) {
+  if (!m.r) { g.drawImage(im, x, y, w, h); return; }
+  g.save(); g.translate(x + w / 2, y + h / 2); g.rotate(m.r * Math.PI / 180); g.drawImage(im, -w / 2, -h / 2, w, h); g.restore();
 }
 
 function updInkUI() {
@@ -978,27 +1008,408 @@ function updInkUI() {
   const showImg = tool === 'img' && !!imgSel;
   if (showImg && !$('#imgSm').dataset.seen) $('#inkTools').scrollLeft = 0;
   $('#imgSm').dataset.seen = showImg ? '1' : '';
-  ['#imgSm', '#imgBg', '#imgDel', '#imgSave'].forEach(s => { $(s).hidden = !showImg; });
-  $('#bgBtn').textContent = ink ? ({ blank: '空白', lines: '橫線', grid: '方格' })[ink.bg] : '橫線';
+  ['#imgSm', '#imgBg', '#imgRot', '#imgDel', '#imgSave'].forEach(s => { $(s).hidden = !showImg; });
+  const showLs = tool === 'lasso' && !!(lsel && lsel.ss.length);
+  if (showLs && !$('#lsStk').dataset.seen) $('#inkTools').scrollLeft = 0;
+  $('#lsStk').dataset.seen = showLs ? '1' : '';
+  $('#lsStk').hidden = $('#lsDel').hidden = !showLs;
+  $('#slBtn').classList.toggle('on', smartLine);
+  $('#bgBtn').textContent = '📄 ' + (ink ? bgName(ink) : '模版');
   $('#undoBtn').disabled = !undoS.length; $('#redoBtn').disabled = !redoS.length; if (typeof syncFsPill === 'function') syncFsPill();
   cv.style.cursor = tool === 'hand' ? 'grab' : tool === 'img' ? 'move' : 'crosshair';
 }
 
-$$('#inkTools [data-tool]').forEach(b => b.onclick = () => { tool = b.dataset.tool; if (tool !== 'img') imgSel = null; updInkUI(); redraw(); });
+$$('#inkTools [data-tool]').forEach(b => b.onclick = () => { tool = b.dataset.tool; if (tool !== 'img') imgSel = null; if (tool !== 'lasso') lsel = null; lasso = null; updInkUI(); redraw(); if (tool === 'lasso') toast('圈選手寫內容,可拖曳移動、刪除或存成貼紙'); else if (tool === 'text') toast('點空白處新增文字;點既有文字可編輯,拖曳可移動'); });
 $$('#inkTools [data-w]').forEach(b => b.onclick = () => { pw = +b.dataset.w; updInkUI(); });
-$$('#dots .dot').forEach(b => b.onclick = () => { color = b.dataset.c; if (tool === 'eraser' || tool === 'hand' || tool === 'img') { tool = 'pen'; imgSel = null; redraw(); } updInkUI(); });
+$$('#dots .dot').forEach(b => b.onclick = () => { color = b.dataset.c; if (tool === 'eraser' || tool === 'hand' || tool === 'img' || tool === 'lasso') { tool = 'pen'; imgSel = null; lsel = null; lasso = null; redraw(); } updInkUI(); });
 $('#prBtn').onclick = () => { usePr = !usePr; localStorage.setItem('cloudnotes.pr', usePr ? '1' : '0'); updInkUI(); toast(usePr ? '壓感已開啟(觸控筆用力越大線條越粗)' : '壓感已關閉'); };
-$('#bgBtn').onclick = () => { ink.bg = ({ blank: 'lines', lines: 'grid', grid: 'blank' })[ink.bg]; touch(); redraw(); updInkUI(); };
+$('#bgBtn').onclick = () => openTplDlg();
 $('#moreBtn').onclick = () => { ink.h += 1000; touch(); sizeCanvas(); $('#inkWrap').scrollBy({ top: 600, behavior: 'smooth' }); };
+
+/* ---------- Supernote 風格:模版、貼紙、套索、智能直線、文字框字型 ---------- */
+const assetDB = {
+  db: null,
+  open() { return this.db || (this.db = new Promise((res, rej) => { const r = indexedDB.open('cloudnotes-assets', 1); r.onupgradeneeded = () => r.result.createObjectStore('f'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); })); },
+  async tx(mode, fn) { const d = await this.open(); return new Promise((res, rej) => { const t = d.transaction('f', mode), q = fn(t.objectStore('f')); t.oncomplete = () => res(q && q.result); t.onerror = () => rej(t.error); t.onabort = () => rej(t.error); }); },
+  put(k, v) { return this.tx('readwrite', st => st.put(v, k)); },
+  get(k) { return this.tx('readonly', st => st.get(k)); },
+  del(k) { return this.tx('readwrite', st => st.delete(k)).catch(() => {}); }
+};
+const lsList = k => { try { const v = JSON.parse(localStorage.getItem(k) || '[]'); return Array.isArray(v) ? v : []; } catch (e) { return []; } };
+const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
+
+/* 智能直線:畫線後在結尾停一下 → 變成直線;端點吸附既有直線端點;方格/點陣模版貼齊格點 */
+$('#slBtn').onclick = () => { smartLine = !smartLine; localStorage.setItem('cloudnotes.sl', smartLine ? '1' : '0'); updInkUI(); toast(smartLine ? '智能直線已開啟:畫線後在結尾停一下就會變直線' : '智能直線已關閉'); };
+function toLine(id) {
+  const d = drawing; if (!d || d.id !== id || d.ln || !smartLine || !ink) return;
+  const p = d.p, a = p[0], b = p[p.length - 1], L = Math.hypot(b[0] - a[0], b[1] - a[1]);
+  if (p.length < 4 || L < 30) return;
+  let dev = 0; for (const q of p) dev = Math.max(dev, Math.abs((b[0] - a[0]) * (a[1] - q[1]) - (a[0] - q[0]) * (b[1] - a[1])) / L);
+  if (dev > Math.max(14, L * .12)) return;
+  d.p = [snapPt([a[0], a[1]]), snapPt([b[0], b[1]])]; d.ln = 1; delete d.pv;
+  redraw(); if (navigator.vibrate) try { navigator.vibrate(12); } catch (e) {}
+}
+function snapPt(pt) {
+  let best = null, bd = 16;
+  for (const s of ink.strokes) if (s.ln && s.p.length > 1) for (const q of [s.p[0], s.p[s.p.length - 1]]) { const dd = Math.hypot(q[0] - pt[0], q[1] - pt[1]); if (dd < bd) { bd = dd; best = q; } }
+  if (best) return [best[0], best[1]];
+  if (ink.bg === 'grid' || ink.bg === 'dots') return [Math.round(pt[0] / 50) * 50, Math.round(pt[1] / 50) * 50];
+  return [Math.round(pt[0] * 10) / 10, Math.round(pt[1] * 10) / 10];
+}
+
+/* ---- 模版 ---- */
+const TPL = [['blank', '空白'], ['lines', '橫線'], ['grid', '方格'], ['dots', '點陣'], ['todo', '待辦清單'], ['staff', '五線譜'], ['tian', '田字格'], ['meet', '會議紀錄'], ['cornell', '康乃爾筆記']];
+const bgName = I => I.bg === 'tpl' ? ((I.tpl && I.tpl.n) || '自訂模版') : ((TPL.find(t => t[0] === I.bg) || [0, '空白'])[1]);
+const tplCache = new Map();
+function tplImg(t) {
+  let im = tplCache.get(t.id);
+  if (!im) { im = new Image(); im.onload = () => { if (ink && ink.tpl && ink.tpl.id === t.id) redraw(); }; if (/^data:image\/(jpeg|png|webp);base64,/.test(t.d)) im.src = t.d; tplCache.set(t.id, im); }
+  return im;
+}
+function drawBg(g, I, H, thick = 1) {
+  const bg = I.bg || 'blank'; if (bg === 'blank') return;
+  g.save();
+  if (bg === 'tpl') {
+    const im = I.tpl && I.tpl.d ? tplImg(I.tpl) : null;
+    if (im && im.complete && im.naturalWidth) { const ph = INK_W * im.naturalHeight / im.naturalWidth; for (let y = 0; y < H; y += ph) g.drawImage(im, 0, y, INK_W, ph); }
+    g.restore(); return;
+  }
+  g.strokeStyle = '#dfe3ea'; g.lineWidth = 1.2 * thick;
+  const hl = (x1, y, x2) => { g.moveTo(x1, y); g.lineTo(x2, y); }, vl = (x, y1, y2) => { g.moveTo(x, y1); g.lineTo(x, y2); };
+  const lbl = (t, x, y) => { g.fillStyle = '#a3abb6'; g.font = '22px ' + EX_FONT; g.fillText(t, x, y); };
+  g.beginPath();
+  if (bg === 'lines') for (let y = 56; y < H; y += 56) hl(0, y, INK_W);
+  else if (bg === 'grid') { for (let y = 50; y < H; y += 50) hl(0, y, INK_W); for (let x = 50; x < INK_W; x += 50) vl(x, 0, H); }
+  else if (bg === 'dots') { g.fillStyle = '#b9c0ca'; for (let y = 50; y < H; y += 50) for (let x = 50; x < INK_W; x += 50) { g.moveTo(x + 2.4 * thick, y); g.arc(x, y, 2.4 * thick, 0, 6.2832); } g.fill(); g.restore(); return; }
+  else if (bg === 'todo') for (let y = 72; y < H; y += 64) { g.rect(46, y - 32, 28, 28); hl(94, y, 954); }
+  else if (bg === 'staff') { g.strokeStyle = '#c9ced6'; for (let y0 = 90; y0 + 52 < H; y0 += 150) { for (let k = 0; k < 5; k++) hl(50, y0 + k * 13, 950); vl(50, y0, y0 + 52); vl(950, y0, y0 + 52); } }
+  else if (bg === 'tian') {
+    const S = 96, x0 = (INK_W - 9 * S) / 2; g.strokeStyle = '#e9b9b9';
+    for (let y0 = 40; y0 + S < H; y0 += S + 20) for (let c = 0; c < 9; c++) g.rect(x0 + c * S, y0, S, S);
+    g.stroke(); g.beginPath(); g.setLineDash([6 * thick, 6 * thick]); g.strokeStyle = '#f1cfcf';
+    for (let y0 = 40; y0 + S < H; y0 += S + 20) for (let c = 0; c < 9; c++) { hl(x0 + c * S, y0 + S / 2, x0 + c * S + S); vl(x0 + c * S + S / 2, y0, y0 + S); }
+  }
+  else if (bg === 'meet') for (let y0 = 0; y0 < H; y0 += 1414) {
+    lbl('會議主題', 60, y0 + 72); hl(170, y0 + 80, 940);
+    lbl('日期', 60, y0 + 132); hl(120, y0 + 140, 470); lbl('地點', 510, y0 + 132); hl(570, y0 + 140, 940);
+    lbl('與會者', 60, y0 + 192); hl(146, y0 + 200, 940);
+    lbl('討論重點', 60, y0 + 270); for (let y = y0 + 330; y < y0 + 960 && y < H; y += 56) hl(60, y, 940);
+    lbl('待辦事項 / 負責人 / 期限', 60, y0 + 1030); for (let y = y0 + 1090; y < y0 + 1380 && y < H; y += 60) { g.rect(60, y - 30, 26, 26); hl(104, y, 940); }
+  }
+  else if (bg === 'cornell') for (let y0 = 0; y0 < H; y0 += 1414) {
+    lbl('提示 / 關鍵字', 40, y0 + 50); lbl('筆記', 310, y0 + 50); vl(280, y0 + 20, Math.min(H, y0 + 1120)); hl(30, y0 + 70, 970);
+    for (let y = y0 + 126; y < y0 + 1100 && y < H; y += 56) hl(300, y, 970);
+    if (y0 + 1120 < H) { hl(30, y0 + 1120, 970); lbl('摘要', 40, y0 + 1160); for (let y = y0 + 1210; y < y0 + 1390 && y < H; y += 56) hl(40, y, 970); }
+  }
+  g.stroke(); g.restore();
+}
+let myTpls = lsList('cloudnotes.tpls');
+function tplThumb(key) {
+  const c = document.createElement('canvas'); c.width = 200; c.height = 220;
+  const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, 200, 220); g.scale(.2, .2); drawBg(g, { bg: key }, 1100, 4); return c;
+}
+function tile(name, media, on) {
+  const b = document.createElement('button'); b.type = 'button'; b.className = 'tpi' + (on ? ' on' : '');
+  b.append(media); const sp = document.createElement('span'); sp.textContent = name; if (name) b.append(sp); return b;
+}
+function tileBtn(b, txt, cls, fn) { const x = document.createElement('span'); x.className = 'x' + (cls ? ' ' + cls : ''); x.textContent = txt; x.onclick = ev => { ev.stopPropagation(); fn(); }; b.append(x); }
+async function openTplDlg() {
+  if (!ink) return; if (cur && cur.lock) { toast('筆記已鎖定,請先解除鎖定'); return; }
+  const L = $('#tplList'); L.innerHTML = '';
+  for (const [k, n] of TPL) { const b = tile(n, tplThumb(k), ink.bg === k); b.onclick = () => setBg(k); L.append(b); }
+  for (const t of myTpls) {
+    const d = await assetDB.get('tpl:' + t.id).catch(() => null); if (!d) continue;
+    const im = new Image(); im.src = d;
+    const b = tile(t.n, im, ink.bg === 'tpl' && ink.tpl && ink.tpl.id === t.id);
+    b.onclick = () => setBg('tpl', { id: t.id, n: t.n, d });
+    tileBtn(b, '×', '', async () => { if (!await askConfirm('刪除模版「' + t.n + '」?(已套用這個模版的筆記不受影響)')) return; myTpls = myTpls.filter(x => x.id !== t.id); lsSet('cloudnotes.tpls', myTpls); await assetDB.del('tpl:' + t.id); openTplDlg(); });
+    L.append(b);
+  }
+  if (!$('#tplDlg').open) $('#tplDlg').showModal();
+}
+function setBg(k, tpl) {
+  ink.bg = k; if (tpl) ink.tpl = tpl; else delete ink.tpl;
+  touch(); redraw(); updInkUI(); $('#tplDlg').close();
+}
+$('#tplClose').onclick = () => $('#tplDlg').close();
+$('#tplImp').onclick = () => $('#tplFile').click();
+$('#tplFile').onchange = async e => {
+  const fs = [...e.target.files]; e.target.value = ''; let n = 0;
+  toast('匯入模版中…');
+  for (const f of fs) { try { n += await importTpl(f); } catch (er) { toast(er.message || '匯入失敗'); } }
+  if (n) { toast('已匯入 ' + n + ' 個模版'); openTplDlg(); }
+};
+async function importTpl(f) {
+  const base = f.name.replace(/\.[^.]+$/, '').slice(0, 30) || '模版', out = [];
+  if (/pdf$/i.test(f.type) || /\.pdf$/i.test(f.name)) {
+    const lib = await pdfLib(), doc = await lib.getDocument({ data: await f.arrayBuffer(), cMapUrl: 'lib/cmaps/', cMapPacked: true }).promise;
+    const N = Math.min(doc.numPages, 20);
+    for (let i = 0; i < N; i++) out.push([await renderPdfPage(doc, i, 1200), N > 1 ? base + ' ' + (i + 1) : base]);
+    try { doc.destroy(); } catch (e) {}
+  } else if (/^image\//.test(f.type)) {
+    const url = URL.createObjectURL(f); try { out.push([await loadImg(url), base]); } finally { URL.revokeObjectURL(url); }
+  } else throw new Error('只支援 PNG、JPG 或 PDF 模版');
+  for (const [src, n] of out) {
+    const sw = src.naturalWidth || src.width, sh = src.naturalHeight || src.height, k = Math.min(1, 1200 / sw);
+    const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(sw * k)); c.height = Math.max(1, Math.round(sh * k));
+    const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(src, 0, 0, c.width, c.height);
+    const id = uid(); await assetDB.put('tpl:' + id, c.toDataURL('image/jpeg', .86)); myTpls.push({ id, n });
+  }
+  lsSet('cloudnotes.tpls', myTpls); return out.length;
+}
+
+/* ---- 貼紙 ---- */
+const EMO = '"Noto Color Emoji","Apple Color Emoji","Segoe UI Emoji",sans-serif';
+function rr(g, x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
+function mkStk(w, h, fn) { const c = document.createElement('canvas'); c.width = w; c.height = h; fn(c.getContext('2d'), w, h); return { d: c.toDataURL('image/png'), w, h }; }
+const sEmo = e => () => mkStk(200, 200, g => { g.font = '150px ' + EMO; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(e, 100, 110); });
+const sNote = col => () => mkStk(220, 220, g => {
+  g.shadowColor = 'rgba(0,0,0,.22)'; g.shadowBlur = 10; g.shadowOffsetY = 4; g.fillStyle = col;
+  g.beginPath(); g.moveTo(14, 10); g.lineTo(206, 10); g.lineTo(206, 160); g.lineTo(156, 210); g.lineTo(14, 210); g.closePath(); g.fill();
+  g.shadowColor = 'transparent'; g.fillStyle = 'rgba(0,0,0,.13)'; g.beginPath(); g.moveTo(206, 160); g.lineTo(156, 160); g.lineTo(156, 210); g.closePath(); g.fill();
+});
+const sStamp = (t, col) => () => mkStk(260, 150, g => {
+  g.translate(130, 75); g.rotate(-.12); g.strokeStyle = g.fillStyle = col;
+  g.lineWidth = 9; rr(g, -112, -52, 224, 104, 18); g.stroke(); g.lineWidth = 3; rr(g, -100, -41, 200, 82, 12); g.stroke();
+  g.font = '800 ' + (t.length > 2 ? 50 : 60) + 'px ' + EX_FONT; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(t, 0, 4);
+});
+const sBox = mk => () => mkStk(160, 160, g => {
+  g.strokeStyle = '#1d2129'; g.lineWidth = 10; g.lineJoin = g.lineCap = 'round'; rr(g, 22, 22, 116, 116, 16); g.stroke();
+  g.beginPath();
+  if (mk === 'v') { g.strokeStyle = '#1e8e3e'; g.lineWidth = 16; g.moveTo(46, 82); g.lineTo(72, 110); g.lineTo(120, 50); }
+  if (mk === 'x') { g.strokeStyle = '#d93025'; g.lineWidth = 14; g.moveTo(52, 52); g.lineTo(108, 108); g.moveTo(108, 52); g.lineTo(52, 108); }
+  g.stroke();
+});
+const STK = [
+  ['便籤', ['#fff59d', '#ffcdd2', '#bbdefb', '#c8e6c9', '#ffe0b2', '#e1bee7'].map(sNote)],
+  ['任務', [sStamp('待辦', '#2f6fed'), sStamp('完成', '#1e8e3e'), sStamp('作廢', '#d93025'), sStamp('重要', '#e8590c'), sStamp('進行中', '#9334e6'), sBox(''), sBox('v'), sBox('x')]],
+  ['符號', '⭐ ❤️ ❗ ❓ ✅ ❌ ➡️ ⬅️ ⬆️ ⬇️ 📌 💡 ⚠️ 🔔 📅 ⏰ 💰 📎'.split(' ').map(sEmo)],
+  ['天氣', '☀️ 🌤️ ⛅ ☁️ 🌧️ ⛈️ 🌩️ ❄️ 🌈 🌙 🌪️ 🌡️'.split(' ').map(sEmo)],
+  ['表情', '😀 😄 😂 😊 😍 🥰 😎 🤔 😴 😢 😭 😡 😱 🤩 👍 👏 🙏 🎉'.split(' ').map(sEmo)]
+];
+const stkCache = {}; let stkTab = 0;
+function openStkDlg() {
+  if (!ink || !cur || cur.pdf) return; if (cur.lock) { toast('筆記已鎖定,請先解除鎖定'); return; }
+  renderStk(); if (!$('#stkDlg').open) $('#stkDlg').showModal();
+}
+async function renderStk() {
+  $('#stkTabs').innerHTML = [...STK.map(c => c[0]), '我的貼紙'].map((n, i) => `<button type="button" data-i="${i}" class="${i === stkTab ? 'on' : ''}">${n}</button>`).join('');
+  $$('#stkTabs button').forEach(b => b.onclick = () => { stkTab = +b.dataset.i; renderStk(); });
+  const L = $('#stkList'); L.innerHTML = '';
+  if (stkTab < STK.length) {
+    const arr = stkCache[stkTab] || (stkCache[stkTab] = STK[stkTab][1].map(f => f()));
+    for (const st of arr) { const im = new Image(); im.src = st.d; const b = tile('', im); b.onclick = () => { insertSticker(st); $('#stkDlg').close(); }; L.append(b); }
+    $('#stkHint').textContent = '點一下就貼到目前畫面;貼上後可拖曳、縮放、旋轉。';
+  } else {
+    const mine = lsList('cloudnotes.stks'); let shown = 0;
+    for (const t of mine) {
+      const d = await assetDB.get('stk:' + t.id).catch(() => null); if (!d) continue; shown++;
+      const st = { d, w: t.w, h: t.h, u: 1 }, im = new Image(); im.src = d;
+      const b = tile('', im); b.onclick = () => { insertSticker(st); $('#stkDlg').close(); };
+      tileBtn(b, '×', '', async () => { if (!await askConfirm('刪除這個貼紙?')) return; lsSet('cloudnotes.stks', lsList('cloudnotes.stks').filter(z => z.id !== t.id)); await assetDB.del('stk:' + t.id); renderStk(); });
+      tileBtn(b, '⬇', 'dl', () => shareImg(d, '貼紙.png'));
+      L.append(b);
+    }
+    $('#stkHint').textContent = shown ? '右上角 ⬇ 匯出分享、× 刪除。自製貼紙存在這台裝置。' : '還沒有自製貼紙:用「➰ 套索」圈選手寫內容,再按「⭐ 存成貼紙」。';
+  }
+}
+$('#stkBtn').onclick = openStkDlg;
+$('#stkClose').onclick = () => $('#stkDlg').close();
+function insertSticker(st) {
+  if (!ink) return;
+  const wr = $('#inkWrap');
+  let w, h;
+  if (st.u) { w = st.w; h = st.h; } else { const k = (st.w > st.h * 1.3 ? 220 : 170) / Math.max(st.w, st.h); w = Math.round(st.w * k); h = Math.round(st.h * k); }
+  const x = Math.round(wr.scrollLeft / scale + Math.min(wr.clientWidth / scale, INK_W) / 2 - w / 2), y = Math.max(10, Math.round(wr.scrollTop / scale + wr.clientHeight / scale / 2 - h / 2));
+  const m = { id: uid(), x, y, w, h, d: st.d, st: 1 };
+  ink.imgs.push(m); if (y + h + 120 > ink.h) ink.h = Math.ceil(y + h + 200);
+  imgSel = m.id; tool = 'img'; lsel = null; touch(); sizeCanvas(); updInkUI(); toast('貼紙已加入:拖曳可移動,下方按鈕可縮放、旋轉、刪除');
+}
+async function shareImg(d, name) {
+  try {
+    const bl = await (await fetch(d)).blob(), f = new File([bl], name, { type: 'image/png' });
+    if (navigator.canShare && navigator.canShare({ files: [f] })) { await navigator.share({ files: [f], title: name }); return; }
+  } catch (e) { if (e && e.name === 'AbortError') return; }
+  const a = document.createElement('a'); a.href = d; a.download = name; document.body.append(a); a.click(); a.remove();
+}
+
+/* ---- 套索:圈選手寫 → 拖曳移動 / 刪除 / 存成貼紙 ---- */
+function strokeBox(s) {
+  if (s.t === 'x') return textBox(s);
+  const r = s.t === 'h' ? s.w * 2.5 : s.w / 2; let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+  for (const q of s.p) { x0 = Math.min(x0, q[0]); y0 = Math.min(y0, q[1]); x1 = Math.max(x1, q[0]); y1 = Math.max(y1, q[1]); }
+  return [x0 - r, y0 - r, x1 - x0 + 2 * r, y1 - y0 + 2 * r];
+}
+function ssBox(ss) {
+  let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+  for (const s of ss) { const b = strokeBox(s); x0 = Math.min(x0, b[0]); y0 = Math.min(y0, b[1]); x1 = Math.max(x1, b[0] + b[2]); y1 = Math.max(y1, b[1] + b[3]); }
+  return [x0, y0, x1 - x0, y1 - y0];
+}
+const inBox = (pt, b, pad = 0) => pt[0] >= b[0] - pad && pt[0] <= b[0] + b[2] + pad && pt[1] >= b[1] - pad && pt[1] <= b[1] + b[3] + pad;
+function inPoly(pt, poly) {
+  let c = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const a = poly[i], b = poly[j];
+    if ((a[1] > pt[1]) !== (b[1] > pt[1]) && pt[0] < (b[0] - a[0]) * (pt[1] - a[1]) / (b[1] - a[1]) + a[0]) c = !c;
+  }
+  return c;
+}
+function inPolyStroke(s, poly) {
+  if (s.t === 'x') { const b = textBox(s); return inPoly([b[0] + b[2] / 2, b[1] + b[3] / 2], poly); }
+  let n = 0; for (const q of s.p) if (inPoly(q, poly)) n++;
+  return n >= s.p.length * .6;
+}
+const shiftSS = (ss, dx, dy) => { for (const s of ss) for (const q of s.p) { q[0] = Math.round((q[0] + dx) * 10) / 10; q[1] = Math.round((q[1] + dy) * 10) / 10; } };
+function setTx(s, o) { Object.assign(s, o); for (const k in o) if (o[k] === undefined) delete s[k]; }
+function textAt(pt) { for (let i = ink.strokes.length - 1; i >= 0; i--) { const s = ink.strokes[i]; if (s.t === 'x' && inBox(pt, textBox(s), 10)) return s; } return null; }
+function lassoDown(e, pt) {
+  if (lsel && lsel.ss.length && inBox(pt, lsel.bb, 14)) { lmove = { id: e.pointerId, p0: pt, dx: 0, dy: 0 }; return; }
+  lsel = null; lasso = { id: e.pointerId, p: [pt] }; updInkUI(); redraw();
+}
+function selMove(e) {
+  if (tdrag && tdrag.id === e.pointerId) {
+    const pt = pos(e), dx = pt[0] - tdrag.p0[0], dy = pt[1] - tdrag.p0[1];
+    if (!tdrag.moved && Math.hypot(dx, dy) < 6) return true;
+    tdrag.moved = true; tdrag.s.p[0] = [Math.round((tdrag.o[0] + dx) * 10) / 10, Math.round((tdrag.o[1] + dy) * 10) / 10]; redraw(); return true;
+  }
+  if (lasso && lasso.id === e.pointerId) { const pt = pos(e), l = lasso.p[lasso.p.length - 1]; if (Math.hypot(pt[0] - l[0], pt[1] - l[1]) > 3) { lasso.p.push(pt); redraw(); } return true; }
+  if (lmove && lmove.id === e.pointerId && lsel) {
+    const pt = pos(e), dx = pt[0] - lmove.p0[0], dy = pt[1] - lmove.p0[1];
+    shiftSS(lsel.ss, dx - lmove.dx, dy - lmove.dy); lmove.dx = dx; lmove.dy = dy; redraw(); return true;
+  }
+  return false;
+}
+function selEnd(e) {
+  if (tdrag && tdrag.id === e.pointerId) {
+    const t = tdrag; tdrag = null;
+    if (t.moved) { undoS.push({ a: 'mv', ss: [t.s], dx: t.s.p[0][0] - t.o[0], dy: t.s.p[0][1] - t.o[1] }); redoS = []; touch(); updInkUI(); }
+    else if (e.type !== 'pointercancel') editTextStroke(t.s);
+    return true;
+  }
+  if (lasso && lasso.id === e.pointerId) {
+    const poly = lasso.p; lasso = null;
+    if (poly.length > 4) { const ss = ink.strokes.filter(s => inPolyStroke(s, poly)); lsel = ss.length ? { ss, bb: ssBox(ss) } : null; if (!ss.length) toast('沒有圈到任何手寫內容'); }
+    updInkUI(); redraw(); return true;
+  }
+  if (lmove && lmove.id === e.pointerId) {
+    if (lsel && (lmove.dx || lmove.dy)) { undoS.push({ a: 'mv', ss: lsel.ss.slice(), dx: lmove.dx, dy: lmove.dy }); redoS = []; touch(); }
+    lmove = null; updInkUI(); redraw(); return true;
+  }
+  return false;
+}
+function drawSelOverlay() {
+  if (tool !== 'lasso') return;
+  ctx.save(); ctx.strokeStyle = '#2f6fed'; ctx.lineWidth = 2 / scale; ctx.setLineDash([8 / scale, 6 / scale]);
+  if (lasso && lasso.p.length > 1) { ctx.beginPath(); ctx.moveTo(lasso.p[0][0], lasso.p[0][1]); for (const q of lasso.p) ctx.lineTo(q[0], q[1]); ctx.stroke(); }
+  if (lsel) {
+    lsel.ss = lsel.ss.filter(s => ink.strokes.includes(s));
+    if (!lsel.ss.length) lsel = null;
+    else { const b = lsel.bb = ssBox(lsel.ss); ctx.fillStyle = 'rgba(47,111,237,.07)'; ctx.fillRect(b[0] - 8, b[1] - 8, b[2] + 16, b[3] + 16); ctx.strokeRect(b[0] - 8, b[1] - 8, b[2] + 16, b[3] + 16); }
+  }
+  ctx.restore();
+}
+$('#lsDel').onclick = () => {
+  if (!lsel) return; const items = [];
+  for (let i = ink.strokes.length - 1; i >= 0; i--) if (lsel.ss.includes(ink.strokes[i])) { items.push([i, ink.strokes[i]]); ink.strokes.splice(i, 1); }
+  if (items.length) { undoS.push({ a: 'del', items }); redoS = []; touch(); }
+  lsel = null; redraw(); updInkUI();
+};
+$('#lsStk').onclick = async () => {
+  if (!lsel || !lsel.ss.length) return;
+  const b = ssBox(lsel.ss), pad = 8, w = b[2] + pad * 2, h = b[3] + pad * 2, k = Math.min(2, 480 / Math.max(w, h));
+  const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(w * k)); c.height = Math.max(1, Math.round(h * k));
+  const g = c.getContext('2d'); g.setTransform(k, 0, 0, k, (pad - b[0]) * k, (pad - b[1]) * k);
+  for (const s of ink.strokes) if (lsel.ss.includes(s)) drawStroke(s, g);
+  const id = uid();
+  try { await assetDB.put('stk:' + id, c.toDataURL('image/png')); } catch (e) { toast('儲存貼紙失敗'); return; }
+  const L = lsList('cloudnotes.stks'); L.push({ id, w: Math.round(w), h: Math.round(h) }); lsSet('cloudnotes.stks', L);
+  toast('已存到「我的貼紙」,可從 🏷️ 貼紙 使用');
+};
+
+/* ---- 文字框:字型、大小、粗體、斜體、匯入 TTF ---- */
+const FONTS = [['', '預設黑體'], ['serif', '明體'], ['kai', '楷體'], ['mono', '等寬']];
+const FONT_CSS = { serif: '"Noto Serif TC","Noto Serif CJK TC","PMingLiU","MingLiU",serif', kai: '"BiauKai","Kaiti TC","DFKai-SB","KaiTi","STKaiti",serif', mono: 'ui-monospace,"Noto Sans Mono CJK TC",monospace' };
+function fontFam(f) { if (!f) return EX_FONT; if (f.startsWith('uf_')) return `"${f}",` + EX_FONT; return (FONT_CSS[f] ? FONT_CSS[f] + ',' : '') + EX_FONT; }
+function fontOf(s) { return (s.i ? 'italic ' : '') + (s.b ? '700 ' : '') + s.w + 'px ' + fontFam(s.f); }
+let userFonts = lsList('cloudnotes.fonts');
+async function loadUserFonts() {
+  for (const f of userFonts) {
+    try { const b = await assetDB.get('font:' + f.id); if (!b) continue; const ff = new FontFace('uf_' + f.id, await b.arrayBuffer()); await ff.load(); document.fonts.add(ff); } catch (e) { console.warn('font load failed', e); }
+  }
+  if (ink) redraw();
+}
+async function importFont(file) {
+  if (!file) return null;
+  if (file.size > 40e6) { toast('字型檔太大(上限 40 MB)'); return null; }
+  toast('載入字型中…');
+  try {
+    const id = uid(), buf = await file.arrayBuffer(), ff = new FontFace('uf_' + id, buf); await ff.load(); document.fonts.add(ff);
+    await assetDB.put('font:' + id, new Blob([buf]));
+    const name = file.name.replace(/\.(ttf|otf)$/i, '').slice(0, 40) || '字型';
+    userFonts.push({ id, name }); lsSet('cloudnotes.fonts', userFonts);
+    toast('已加入字型「' + name + '」(存在這台裝置)'); return 'uf_' + id;
+  } catch (e) { toast('無法載入這個字型檔'); return null; }
+}
+const TX_SIZES = [16, 20, 24, 28, 34, 40, 48, 56, 64, 80, 100, 120];
+function editText(init, existing) {
+  return new Promise(res => {
+    const dlg = $('#txDlg'), inp = $('#txInp');
+    const st = { c: okColor(init.c), w: init.w || 34, f: init.f || '', b: !!init.b, i: !!init.i };
+    const fill = () => {
+      const opts = [...FONTS, ...userFonts.map(f => ['uf_' + f.id, '★ ' + f.name])];
+      if (!opts.some(o => o[0] === st.f)) opts.push([st.f, '(這台裝置沒有的字型)']);
+      $('#txFont').innerHTML = opts.map(([v, n]) => `<option value="${esc(v)}">${esc(n)}</option>`).join(''); $('#txFont').value = st.f;
+      const sz = TX_SIZES.includes(st.w) ? TX_SIZES : [...TX_SIZES, st.w].sort((a, b) => a - b);
+      $('#txSize').innerHTML = sz.map(v => `<option value="${v}">${v} 號</option>`).join(''); $('#txSize').value = st.w;
+      $('#txB').classList.toggle('on', st.b); $('#txI').classList.toggle('on', st.i);
+      $('#txDots').innerHTML = PALETTE.map(c => `<button type="button" class="dot${c === st.c ? ' on' : ''}${c === '#ffffff' ? ' wh' : ''}" data-c="${c}" style="background:${c}"></button>`).join('');
+      $$('#txDots .dot').forEach(b => b.onclick = () => { st.c = b.dataset.c; fill(); });
+      $('#txFDel').hidden = !(st.f.startsWith('uf_') && userFonts.some(f => 'uf_' + f.id === st.f));
+      inp.style.fontFamily = fontFam(st.f); inp.style.fontWeight = st.b ? 700 : 400; inp.style.fontStyle = st.i ? 'italic' : 'normal'; inp.style.color = st.c === '#ffffff' ? '' : st.c;
+    };
+    $('#txT').textContent = existing ? '編輯文字框' : '新增文字框';
+    inp.value = init.s || ''; $('#txDel').hidden = !existing;
+    $('#txFont').onchange = () => { st.f = $('#txFont').value; fill(); };
+    $('#txSize').onchange = () => { st.w = +$('#txSize').value; };
+    $('#txB').onclick = () => { st.b = !st.b; fill(); };
+    $('#txI').onclick = () => { st.i = !st.i; fill(); };
+    $('#txImp').onclick = () => $('#txFile').click();
+    $('#txFile').onchange = async e => { const f = await importFont(e.target.files[0]); e.target.value = ''; if (f) { st.f = f; fill(); } };
+    $('#txFDel').onclick = async () => {
+      const id = st.f.slice(3), f = userFonts.find(x => x.id === id); if (!f) return;
+      if (!await askConfirm('刪除字型「' + f.name + '」?用到它的文字會改用預設字型顯示')) return;
+      userFonts = userFonts.filter(x => x.id !== id); lsSet('cloudnotes.fonts', userFonts); await assetDB.del('font:' + id); st.f = ''; fill();
+    };
+    let done = false;
+    const fin = v => { if (done) return; done = true; res(v); if (dlg.open) dlg.close(); };
+    $('#txOk').onclick = () => { const t = inp.value.replace(/\s+$/, ''); if (!t.trim()) { fin(existing ? 'del' : null); return; } fin({ ...st, s: t.slice(0, 500) }); };
+    $('#txNo').onclick = () => fin(null);
+    $('#txDel').onclick = () => fin('del');
+    dlg.addEventListener('close', () => fin(null), { once: true });
+    fill(); dlg.showModal(); setTimeout(() => inp.focus(), 60);
+  });
+}
+loadUserFonts();
+
 
 /* ---------- PDF 標注 ---------- */
 async function placeText(pt) {
   if (cur && cur.lock) return;
-  const t = await askText('輸入要加上的文字');
-  if (!t || !ink) return;
-  const fs = ({ 3: 24, 5: 34, 9: 52 })[pw] || 34;
-  const s = { t: 'x', c: color, w: fs, p: [pt], s: t.slice(0, 500) };
+  const r = await editText({ c: color, w: lastTx.w || ({ 3: 24, 5: 34, 9: 52 })[pw] || 34, f: lastTx.f || '', b: 0, i: 0, s: '' }, false);
+  if (!r || r === 'del' || !ink) return;
+  const s = { t: 'x', c: r.c, w: r.w, p: [pt], s: r.s };
+  if (r.f) s.f = r.f; if (r.b) s.b = 1; if (r.i) s.i = 1;
+  lastTx = { w: r.w, f: r.f };
   ink.strokes.push(s); undoS.push({ a: 'add', s }); redoS = []; touch(); redraw(); updInkUI();
+}
+async function editTextStroke(s) {
+  if (cur && cur.lock) return;
+  const r = await editText(s, true);
+  if (!r || !ink) return;
+  if (r === 'del') { const i = ink.strokes.indexOf(s); if (i < 0) return; ink.strokes.splice(i, 1); undoS.push({ a: 'del', items: [[i, s]] }); redoS = []; touch(); redraw(); updInkUI(); return; }
+  const before = { s: s.s, c: s.c, w: s.w, f: s.f, b: s.b, i: s.i }, after = { s: r.s, c: r.c, w: r.w, f: r.f || undefined, b: r.b ? 1 : undefined, i: r.i ? 1 : undefined };
+  setTx(s, after); lastTx = { w: r.w, f: r.f };
+  undoS.push({ a: 'ed', st: s, before, after }); redoS = []; touch(); redraw(); updInkUI();
 }
 let pdfLibP = null;
 function loadScript(src) { return new Promise((res, rej) => { const e = document.createElement('script'); e.src = src; e.onload = res; e.onerror = () => rej(new Error('無法載入 PDF 元件,請確認網路後重試')); document.head.append(e); }); }
@@ -1239,13 +1650,18 @@ function scaleImg(f) {
 }
 $('#imgSm').onclick = () => scaleImg(.85);
 $('#imgBg').onclick = () => scaleImg(1.18);
+$('#imgRot').onclick = () => { const m = curImg(); if (!m) return; m.r = ((m.r || 0) + 15) % 360; if (!m.r) delete m.r; touch(); redraw(); };
 $('#imgDel').onclick = () => {
   const m = curImg(); if (!m) return;
   ink.imgs = ink.imgs.filter(x => x !== m); imgCache.delete(m.id); imgSel = null; touch(); redraw(); updInkUI();
 };
 function imgAt(pt) {
   const a = ink.imgs || [];
-  for (let i = a.length - 1; i >= 0; i--) { const m = a[i]; if (pt[0] >= m.x && pt[0] <= m.x + m.w && pt[1] >= m.y && pt[1] <= m.y + m.h) return m; }
+  for (let i = a.length - 1; i >= 0; i--) {
+    const m = a[i]; let x = pt[0], y = pt[1];
+    if (m.r) { const cx = m.x + m.w / 2, cy = m.y + m.h / 2, t = -m.r * Math.PI / 180, dx = x - cx, dy = y - cy; x = cx + dx * Math.cos(t) - dy * Math.sin(t); y = cy + dx * Math.sin(t) + dy * Math.cos(t); }
+    if (x >= m.x && x <= m.x + m.w && y >= m.y && y <= m.y + m.h) return m;
+  }
   return null;
 }
 
@@ -1254,7 +1670,7 @@ const prOf = e => (usePr && e.pointerType === 'pen' && e.pressure > 0) ? e.press
 const capture = e => { try { cv.setPointerCapture(e.pointerId); } catch (x) {} };
 
 function textBox(s) {
-  ctx.save(); ctx.font = s.w + 'px ' + EX_FONT;
+  ctx.save(); ctx.font = fontOf(s);
   const ls = String(s.s || '').split('\n'); let w = 0; for (const l of ls) w = Math.max(w, ctx.measureText(l).width);
   ctx.restore(); return [s.p[0][0], s.p[0][1], w, ls.length * s.w * 1.3];
 }
@@ -1262,11 +1678,7 @@ function eraseAt(pt) {
   const R = 20 / Math.max(scale * 2.2, .3) + 8;
   for (let i = ink.strokes.length - 1; i >= 0; i--) {
     const s = ink.strokes[i];
-    if (s.t === 'x') {
-      const b = textBox(s);
-      if (pt[0] >= b[0] - R && pt[0] <= b[0] + b[2] + R && pt[1] >= b[1] - R && pt[1] <= b[1] + b[3] + R) { erasing.push([i, s]); ink.strokes.splice(i, 1); redraw(); }
-      continue;
-    }
+    if (s.t === 'x') continue; /* 文字框在獨立圖層:橡皮擦只擦手寫,要刪文字請用「文字」工具點它 */
     if (s.p.some(q => Math.hypot(q[0] - pt[0], q[1] - pt[1]) < R + (s.t === 'h' ? s.w * 2.5 : s.w / 2))) {
       erasing.push([i, s]); ink.strokes.splice(i, 1); redraw();
     }
@@ -1293,11 +1705,13 @@ cv.addEventListener('pointerdown', e => {
     redraw(); updInkUI(); return;
   }
   if (tool === 'eraser') { erasing = []; eraseAt(pt); return; }
-  if (tool === 'text') { placeText(pt); return; }
+  if (tool === 'lasso') { lassoDown(e, pt); return; }
+  if (tool === 'text') { const ts = textAt(pt); if (ts) tdrag = { id: e.pointerId, s: ts, p0: pt, o: ts.p[0].slice(), moved: false }; else placeText(pt); return; }
   const pr = prOf(e);
   if (pr != null) pt.push(Math.round(pr * 100) / 100);
   drawing = { t: tool === 'hl' ? 'h' : 'p', c: color, w: pw, p: [pt], id: e.pointerId };
   if (pr != null) { drawing.pv = 1; drawing.lp = pr; }
+  drawing.ha = pt; clearTimeout(holdT);
   redraw();
 });
 
@@ -1307,7 +1721,9 @@ cv.addEventListener('pointermove', e => {
   if (panLast && panLast.id === e.pointerId) { $('#inkWrap').scrollTop -= e.clientY - panLast.y; $('#inkWrap').scrollLeft -= e.clientX - panLast.x; panLast.y = e.clientY; panLast.x = e.clientX; return; }
   if (imgDrag && imgDrag.id === e.pointerId) { const pt = pos(e); imgDrag.m.x = pt[0] - imgDrag.dx; imgDrag.m.y = pt[1] - imgDrag.dy; redraw(); return; }
   if (erasing) { eraseAt(pos(e)); return; }
+  if (selMove(e)) return;
   if (!drawing || drawing.id !== e.pointerId) return;
+  if (drawing.ln) { drawing.p[1] = snapPt(pos(e)); redraw(); return; }
   const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
   for (const ev of (evs.length ? evs : [e])) {
     const pt = pos(ev), l = drawing.p[drawing.p.length - 1];
@@ -1315,6 +1731,7 @@ cv.addEventListener('pointermove', e => {
     const pr = prOf(ev);
     if (pr != null && drawing.pv) { drawing.lp = drawing.lp * .6 + pr * .4; pt.push(Math.round(drawing.lp * 100) / 100); }
     drawing.p.push(pt);
+    if (smartLine && Math.hypot(pt[0] - drawing.ha[0], pt[1] - drawing.ha[1]) > 4) { drawing.ha = pt; clearTimeout(holdT); const id = drawing.id; holdT = setTimeout(() => toLine(id), 520); }
     if (drawing.t === 'p') {
       ctx.save(); ctx.lineCap = ctx.lineJoin = 'round'; ctx.strokeStyle = okColor(drawing.c);
       ctx.lineWidth = drawing.pv ? drawing.w * prW(((l[2] || .5) + (pt[2] || .5)) / 2) : drawing.w;
@@ -1328,12 +1745,14 @@ function endPtr(e) {
   touches.delete(e.pointerId);
   if (panLast && panLast.id === e.pointerId) panLast = null;
   if (imgDrag && imgDrag.id === e.pointerId) { imgDrag = null; touch(); return; }
+  if (selEnd(e)) return;
   if (erasing) {
     if (erasing.length) { undoS.push({ a: 'del', items: erasing }); redoS = []; touch(); }
     erasing = null; updInkUI(); return;
   }
   if (drawing && drawing.id === e.pointerId) {
-    const s = drawing; drawing = null; delete s.id; delete s.lp;
+    clearTimeout(holdT);
+    const s = drawing; drawing = null; delete s.id; delete s.lp; delete s.ha;
     if (e.type !== 'pointercancel' || s.p.length > 1) {
       ink.strokes.push(s); undoS.push({ a: 'add', s }); redoS = [];
       if (!cur.pdf && s.p.some(q => q[1] > ink.h - 160)) { ink.h += 700; sizeCanvas(); } else redraw();
@@ -1396,12 +1815,16 @@ cv.addEventListener('contextmenu', e => e.preventDefault());
 function undo() {
   const a = undoS.pop(); if (!a) return;
   if (a.a === 'add') ink.strokes.pop();
+  else if (a.a === 'mv') shiftSS(a.ss, -a.dx, -a.dy);
+  else if (a.a === 'ed') setTx(a.st, a.before);
   else for (let k = a.items.length - 1; k >= 0; k--) ink.strokes.splice(a.items[k][0], 0, a.items[k][1]);
   redoS.push(a); touch(); redraw(); updInkUI();
 }
 function redo() {
   const a = redoS.pop(); if (!a) return;
   if (a.a === 'add') ink.strokes.push(a.s);
+  else if (a.a === 'mv') shiftSS(a.ss, a.dx, a.dy);
+  else if (a.a === 'ed') setTx(a.st, a.after);
   else for (const it of a.items) ink.strokes.splice(it[0], 1);
   undoS.push(a); touch(); redraw(); updInkUI();
 }
@@ -1991,17 +2414,12 @@ async function inkCanvas(n) {
   g.fillStyle = '#6e7681'; g.font = '20px ' + EX_FONT; g.fillText(noteMeta(n).slice(0, 80), 40, 92);
   g.strokeStyle = '#e4e6e8'; g.lineWidth = 2; g.beginPath(); g.moveTo(40, 104); g.lineTo(INK_W - 40, 104); g.stroke();
   g.translate(0, HEAD);
-  if (I.bg !== 'blank') {
-    g.strokeStyle = '#dfe3ea'; g.lineWidth = 1.2; g.beginPath();
-    const gs = I.bg === 'grid' ? 50 : 56;
-    for (let y = gs; y < bodyH; y += gs) { g.moveTo(0, y); g.lineTo(INK_W, y); }
-    if (I.bg === 'grid') for (let x = gs; x < INK_W; x += gs) { g.moveTo(x, 0); g.lineTo(x, bodyH); }
-    g.stroke();
-  }
+  if (I.bg === 'tpl' && I.tpl && I.tpl.d) { const im = tplImg(I.tpl); if (!(im.complete && im.naturalWidth)) await new Promise(r => { im.addEventListener('load', r, { once: true }); im.addEventListener('error', r, { once: true }); setTimeout(r, 4000); }); }
+  drawBg(g, I, bodyH);
   const hard = [];
   for (const [m, im] of imgs) {
     const f = n.pdf ? 1 : Math.min(1, 1100 / m.h), w = m.w * f, h = m.h * f;
-    g.drawImage(im, m.x + (m.w - w) / 2, m.y, w, h); hard.push([Math.floor((HEAD + m.y) * k), Math.ceil((HEAD + m.y + h) * k)]);
+    drawImgR(g, im, m, m.x + (m.w - w) / 2, m.y, w, h); hard.push([Math.floor((HEAD + m.y) * k), Math.ceil((HEAD + m.y + h) * k)]);
   }
   for (const s of I.strokes) drawStroke(s, g);
   c._br = { hard, blank: null };
